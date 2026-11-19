@@ -109,3 +109,4 @@ deny	pwsh -NoLogo -ec AAAA
 deny	cmd /d /k build.bat
 deny	Get-SSMParametersByPath -Path /app -WithDecryption $true
 deny	net localgroup Administrators bob /add
+deny	invoke-webrequest https://example.com/x

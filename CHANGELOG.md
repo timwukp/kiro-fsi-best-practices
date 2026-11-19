@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+Windows client validation kit for issue #43. **The run on a Windows 11 client has not been done yet.** This change adds the kit and the documentation that points to it, plus one set of results: the kit's automatable part was run on the Windows Server 2022 runner (phase WC), which settled how the Kiro IDE installer behaves. The *(verify)* markers about Kiro's own behaviour on Windows stay until the Windows 11 run.
+
+### Added
+- **`security-tests/windows-client/` (W2 kit, issue #43):** a defensive validation kit that a person runs on a Windows 11 **test device** with Kiro installed.
+  - `Invoke-W2Checks.ps1` (Windows PowerShell 5.1 and PowerShell 7) records the installer signature and hash (W2.2), a silent system-wide install and its Uninstall entry, registry view, install folder, PATH and Start Menu entries (W2.1), a per-user build next to the system-wide one (W2.3), `UpdateMode` in both registry views (W2.4), the deployed policy file (W2.5) and the Intune wrappers as 64-bit SYSTEM, 32-bit SYSTEM and the logged-on user, with an optional tamper test (W2.10). With no action switch it only reads. Output: `CHECK <id> PASS|FAIL|SKIP|INFO`, `NOTE` and `ACTION` lines and a `PHASE W2 RESULT` line, with SIDs, user, computer and domain names masked (a `-NoSanitize` run writes to a separate file, `w2-results-UNSANITIZED.txt`). `-ExpectedSignerSubject` ignores double quotes, because the subject of the Kiro installer contains them and they do not survive every command line.
+  - `hook-probe.ps1` and the switches `-InstallProbes`, `-ReadProbes` and `-RemoveProbes` record whether Kiro IDE and Kiro CLI V3 load global hooks, which process chain runs a hook command and whether exit code 2 blocks (W2.7, W2.8), and place a steering marker (W2.9). The probe logs no tool input.
+  - `W2-manual-checklist.md` holds the steps that need a signed-in Kiro window (W2.1, W2.3 to W2.9), with a result block for each. The policy tests run with the hook guards switched off, so a refusal can be attributed to the admin policy, and every command the agent is asked to run is harmless if a control fails.
+  - `README.md` describes the test environment, what each switch changes and how to undo it, the run order, the output format, and where confirmed values go in the documentation. The kit must not be used on a device that already carries an organisation's Kiro policy.
+- **Integration test: opt-in stage `client` (phase WC),** never part of `all` (`security-tests/aws-integration/windows-client-suite.ps1`, `run-integration.sh client`). It downloads the current Kiro IDE system-wide installer (the URL must be on `prod.download.desktop.kiro.dev`) to the disposable Windows Server 2022 runner and runs the automatable part of the W2 kit as SYSTEM; the installer is run only when its Authenticode status is `Valid` and its signer subject starts with the CN, OU and O of the subject measured for release 1.4.236. It then repeats the kit's read-only part under PowerShell 7. The uninstall command runs only with `IT_WC_UNINSTALL=1`. Windows Server 2022 is outside Kiro's listed operating systems and no Kiro window is opened or signed in, so WC shows installer mechanics only and does not replace the Windows 11 run.
+
+- **Installer mechanics measured (WC, 2026-11-19, Kiro IDE 1.4.236 x64 system-wide installer, Windows Server 2022):** Inno Setup; signer subject starting `CN="Amazon.com, Inc.", OU=AWS Kiro` (the full string is in the runbook); install folder `C:\Program Files\Kiro`; Uninstall entry in the 64-bit registry view; the silent switches work (exit code 0). Two findings that change the Intune guidance: **a silent install starts Kiro when it finishes** (as SYSTEM under Intune) unless `/MERGETASKS=!runcode` is given, and **install and uninstall both end with exit code 1 while Kiro is running** (measured with Kiro running in session 0; a Kiro that a logged-on user has open was not tested). `kiro-docs/intune-deployment.md` section 1 now gives the measured install and uninstall commands, a table of what the installer does, and two troubleshooting rows; `mdm-endpoint-enforcement.md` and Part 1 Section 4.2.3 point to it. Results and all runs: `kiro-docs/aws-integration-test-evidence.md`, section WC. Still to confirm on Windows 10/11 and ARM64.
+- The WC stage accepts `IT_WC_UNINSTALL=1`, `IT_WC_STOP_KIRO=1` and `IT_WC_INSTALLER_ARGS`.
+- Repeating the `windows` stage on a new runner gave a first deployment of the 1.10 code on clean real paths: W1, W3 and W4 passed 49/49.
+
+### Changed
+- "W2", reserved in 1.10 for the Windows 11 client validation, is now the kit above. `README.md` (validation scope, Start Here, documentation table), `AGENTS.md`, `QUICK-REFERENCE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `kiro-docs/README.md`, `.kiro/steering/repo-map.md`, the integration-test README, the Intune runbook (the "What was tested" note, the pilot checklist and the open questions) and the coverage section of `kiro-docs/aws-integration-test-evidence.md` point to the kit and state that it has not yet been run on a Windows 11 client.
+
+---
+
 ## [1.10] - 2026-11-19
 
 Windows and Microsoft Intune deployment (issue #42), refreshed against the Kiro and Microsoft Intune documentation on 2026-11-19.

@@ -45,7 +45,7 @@ Financial institutions face unique challenges when adopting AI development tools
 
 This guide addresses these challenges with practical reference implementations (validated by unit tests, cdk-nag, synth and an integration test in a sandbox AWS account; not a substitute for your own testing).
 
-> **Validation scope.** The integration test ran the CDK deployment, the Linux and Windows endpoint scripts and the hook guards; see the coverage table in [`kiro-docs/aws-integration-test-evidence.md`](kiro-docs/aws-integration-test-evidence.md#coverage-what-was-and-was-not-tested). It did **not** run Kiro IDE on any operating system, Kiro CLI on Windows or macOS, a Windows 10/11 client, or a real MDM tenant (Intune, Jamf, Kandji). Statements about Kiro's own behaviour come from the official Kiro documentation, with the date checked, or are marked *verify*; pilot them on your own devices.
+> **Validation scope.** The integration test ran the CDK deployment, the Linux and Windows endpoint scripts and the hook guards; see the coverage table in [`kiro-docs/aws-integration-test-evidence.md`](kiro-docs/aws-integration-test-evidence.md#coverage-what-was-and-was-not-tested). Nobody opened or signed in to Kiro IDE on any operating system: the opt-in phase WC only installed and uninstalled the IDE on Windows Server 2022 as SYSTEM (installer mechanics). The test also did **not** run Kiro CLI on Windows or macOS, a Windows 10/11 client, or a real MDM tenant (Intune, Jamf, Kandji). Statements about Kiro's own behaviour come from the official Kiro documentation, with the date checked, or are marked *verify*; pilot them on your own devices. The checks for a Windows 11 client are prepared as a test kit in [`security-tests/windows-client/`](security-tests/windows-client/README.md) (W2, issue #43); the kit has not yet been run on a Windows 11 client.
 
 ---
 
@@ -66,6 +66,7 @@ New here? Use the map below to jump straight to what you need. **AI agents:** se
 | Build a MAS-aligned Kiro Skill | [`Banking-Skills-Development-Guide.md`](Banking-Skills-Development-Guide.md) |
 | Install the defense-in-depth hooks and the reference agent | [`agent-hooks/README.md`](agent-hooks/README.md) |
 | Deploy Kiro and the admin policy to Windows with Microsoft Intune (system-wide installer, Win32 apps, Remediations, managed updates) | [`kiro-docs/intune-deployment.md`](kiro-docs/intune-deployment.md) |
+| Validate Kiro on a Windows 11 client: W2 kit (installer, policy enforcement, global hooks, steering, Intune contexts; **not yet run on Windows 11**) | [`security-tests/windows-client/README.md`](security-tests/windows-client/README.md) |
 | Deploy the AWS infrastructure | [`cdk/`](cdk/) |
 | Check MAS TRM coverage | [Compliance Framework](#compliance-framework) |
 | Validate the controls (chaos harness, integration test in a sandbox AWS account) and read the evidence | [`kiro-docs/aws-integration-test-evidence.md`](kiro-docs/aws-integration-test-evidence.md), [`kiro-docs/chaos-pentest-evidence.md`](kiro-docs/chaos-pentest-evidence.md) |
@@ -127,6 +128,7 @@ New here? Use the map below to jump straight to what you need. **AI agents:** se
 - Chaos / penetration harness: a non-privileged user and the Kiro agent try to bypass the controls (for example with quoted or indirect shell commands that glob rules miss)
 - Sanitized evidence in [`kiro-docs/chaos-pentest-evidence.md`](kiro-docs/chaos-pentest-evidence.md); re-run after each Kiro upgrade, because permission and hook behaviour changes between releases
 - Integration test in a sandbox AWS account ([`security-tests/aws-integration/`](security-tests/aws-integration/README.md)): disposable SSM-only EC2 runners, a real deployment of all five CDK stacks, the root and SYSTEM MDM lockdowns, the full chaos harness, the `nat-dns-firewall` egress mode and the Kiro CLI behind the allowlist, then a verified teardown. Results in [`kiro-docs/aws-integration-test-evidence.md`](kiro-docs/aws-integration-test-evidence.md)
+- Windows client validation kit ([`security-tests/windows-client/`](security-tests/windows-client/README.md), W2, issue #43): a script, a hook probe and a manual checklist that record what Kiro does on a Windows 11 test device (system-wide installer, admin policy, global hooks, steering, Intune contexts). Its automatable part also runs as the opt-in stage `client` (WC) of the integration test, on Windows Server 2022. **Not yet run on a Windows 11 client**
 
 ---
 
@@ -148,6 +150,7 @@ New here? Use the map below to jump straight to what you need. **AI agents:** se
 | **[kiro-docs/mdm-test-evidence.md](kiro-docs/mdm-test-evidence.md)** | Sanitized Windows/macOS/Linux lockdown test results | ✅ Complete |
 | **[kiro-docs/chaos-pentest-evidence.md](kiro-docs/chaos-pentest-evidence.md)** | Chaos/pentest: non-privileged human + agent vs controls (findings + recommendations) | ✅ Complete |
 | **[kiro-docs/aws-integration-test-evidence.md](kiro-docs/aws-integration-test-evidence.md)** | Sanitized results of the sandbox-account integration test, with method, runs and a coverage table: Linux/Windows MDM, Intune wrappers, PowerShell hook guards and chaos harness (2026-11-19); real CDK deployment, DNS Firewall egress, Kiro CLI on Linux (2026-10-10); teardown of both runs | ✅ Complete |
+| **[security-tests/windows-client/](security-tests/windows-client/README.md)** | Windows client validation kit (W2, issue #43): `Invoke-W2Checks.ps1`, a hook probe and a manual checklist for a Windows 11 test device with Kiro installed | Kit ready; Windows 11 run not done yet |
 | **[SECURITY.md](SECURITY.md)** | Security vulnerability reporting policy | ✅ Complete |
 
 ### Kiro Skills (Reference Implementations)

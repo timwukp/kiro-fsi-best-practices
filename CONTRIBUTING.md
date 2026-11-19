@@ -48,6 +48,13 @@ manually and always torn down afterwards. When you re-run it, update
 [`kiro-docs/aws-integration-test-evidence.md`](kiro-docs/aws-integration-test-evidence.md) with sanitized
 results, never with account IDs, resource IDs, IPs or keys.
 
+What Kiro itself does on Windows (policy enforcement, global hooks, steering, and the system-wide installer
+on a supported operating system) can only be checked on a Windows 11 client with Kiro installed. Use the W2 kit for that
+([`security-tests/windows-client/`](security-tests/windows-client/README.md), issue #43), on a test device
+only. Its automatable part also runs on the Windows Server runner as the opt-in integration-test stage
+`client` (WC). The kit has not yet been run on a Windows 11 client; when you run it, follow its section
+"Where confirmed values go".
+
 If you change a hook script in `agent-hooks/`, regenerate `agent-hooks/SHA256SUMS` in the same
 change as described in [`agent-hooks/README.md`](agent-hooks/README.md) and confirm
 `(cd agent-hooks && shasum -a 256 -c SHA256SUMS)` passes (`sha256sum -c` on Linux; CI checks it).

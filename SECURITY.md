@@ -116,6 +116,13 @@ CI has no AWS credentials and makes no system changes. The checks that need a re
 (staging, detection and remediation wrappers) and the PowerShell hook guards on a Windows Server runner,
 the full chaos harness, the DNS Firewall egress mode and the Kiro CLI behind the allowlist.
 
+An opt-in stage, `client` (phase WC, never part of `all`), downloads the Kiro IDE system-wide installer to
+the Windows Server runner and runs the automatable part of the Windows client validation kit
+([`security-tests/windows-client/`](security-tests/windows-client/README.md), W2, issue #43). The kit itself
+is run by hand on a Windows 11 **test device**: it installs Kiro, deploys the sample policy and tampers with
+it, so it must never be run on a device that carries an organisation's policy. It has not yet been run on a
+Windows 11 client.
+
 The test environment is isolated:
 - the runners are reachable only through Systems Manager (no inbound rules, no SSH keys);
 - IMDSv2 is required and volumes are encrypted;
