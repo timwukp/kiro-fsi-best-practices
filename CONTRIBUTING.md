@@ -31,10 +31,15 @@ same commands. The shell tests need `bash` and `jq`; the PII pattern tests also 
 | Agent hooks | `bash agent-hooks/tests/run-tests.sh` | `PASS=98 FAIL=0` |
 | PII skill patterns | `bash .kiro/skills/pii-detection/tests/patterns.test.sh` | `PASS=346 FAIL=0` |
 | MDM (Linux script, dry run) | `bash mdm/tests/test-lockdown.sh` | `FAIL=0`; non-root, makes no system changes |
+| Admin policy (structure, README rule table, shell vectors) | `bash managed-settings/tests/test-policy.sh` | `FAIL=0` |
 
 Optional per-OS MDM tests (also dry run by default, no root or admin):
 `bash mdm/tests/test-lockdown-macos.sh` and
-`powershell -ExecutionPolicy Bypass -File mdm\tests\test-lockdown-windows.ps1`.
+`powershell -ExecutionPolicy Bypass -File mdm\tests\test-lockdown-windows.ps1`. On Windows, also run
+`powershell -ExecutionPolicy Bypass -File agent-hooks\tests\run-tests.ps1` (PowerShell hook guards). CI runs
+both Windows suites under Windows PowerShell 5.1 and PowerShell 7 (`validate-windows`). After changing a
+file listed in `agent-hooks/SHA256SUMS`, regenerate it (see `agent-hooks/README.md`). `.gitattributes` keeps those
+files LF in a fresh clone; an older Windows clone with CRLF files needs a new clone before the hashes match.
 
 Changes to `cdk/`, `mdm/`, `agent-hooks/` or the egress allowlist can also be checked end to end with the
 integration test in a **sandbox AWS account**
@@ -72,7 +77,9 @@ change as described in [`agent-hooks/README.md`](agent-hooks/README.md) and conf
 ### Managed settings and hooks
 
 - Admin rules in `managed-settings/managed-settings*.json` may only use the `deny` or `ask`
-  effect (CI rejects anything else).
+  effect (CI rejects anything else). Change both policy files together, and update the rule table in
+  `managed-settings/README.md` and the vectors in `managed-settings/tests/shell-vectors.tsv`
+  (`bash managed-settings/tests/test-policy.sh` checks all three).
 - Hooks live in top-level `agent-hooks/`, not `.kiro/hooks/`.
 
 ### Diagrams

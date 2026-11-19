@@ -7,20 +7,26 @@ compiled from the official Kiro changelog. Use this alongside
 `permissions-and-managed-settings.md` when designing a
 MAS-aligned Kiro deployment.
 
-> **Last reviewed:** 2026-10-08. Verify current behaviour against
+> **Last reviewed:** 2026-11-19. Verify current behaviour against
 > https://kiro.dev/changelog/ before relying on any single item.
 > Scope: security/governance-relevant changes only — productivity/UX-only
 > releases (e.g. CLI 2.2/2.4, IDE 0.12) are intentionally not itemised.
-> Latest versions on 2026-10-08: Kiro IDE 1.2.37 and Kiro CLI 2.28.0 (both 2026-10-05).
+> For current versions see the changelog; on 2026-11-19 the latest were Kiro IDE
+> 1.4.236 (2026-11-18) and Kiro CLI 3.5.0 (2026-11-17).
 
-> **CLI "V3" is an engine, not a version.** There is no Kiro CLI 3.x binary.
-> The V3 engine ships inside CLI 2.x (`kiro-cli --v3`; docs at
-> https://kiro.dev/docs/cli/v3/). It uses the same agent harness as the IDE and
-> Kiro Web and brings capability-based `permissions.yaml`, standalone
-> `.kiro/hooks/*.json` hook files, Markdown agent configs, the Spec agent, plan
-> mode and trusted workspaces; it removes `aws_tool`. CLI 2.26.0 shows a
-> deprecation notice for Classic sessions, and CLI 2.28.0 offers to switch
-> Classic sessions to 3.0.
+> **"V3" is the CLI agent harness; CLI 3.x is the version.** Kiro CLI **3.0.0**
+> (2026-11-03) is a single standalone `kiro-cli` binary that makes the V3
+> harness the default for interactive sessions and for headless runs with
+> `--trust-all-tools`. It retires the Classic (V1) interface and the desktop
+> app; the V2 harness stays available with `kiro-cli --v2`, and a local
+> headless run with no harness named still starts on V2
+> (https://kiro.dev/docs/cli/agent-harness/). Name the harness in scripts
+> (`kiro-cli chat --v3 --no-interactive ...`). Before 3.0, CLI 2.x ran V3 with
+> `kiro-cli --v3`. V3 uses the same agent harness as the IDE and Kiro Web and
+> brings capability-based `permissions.yaml`, standalone `.kiro/hooks/*.json`
+> hook files, Markdown agent configs, the Spec agent, plan mode and trusted
+> workspaces. Kiro's docs still say "V3 sessions": read that as the harness,
+> not as "3.x".
 
 ---
 
@@ -33,6 +39,9 @@ Enterprise (console, account, compliance) · **Models** = model launches.
 
 | Date | Surface | Version | Feature |
 |------|---------|---------|---------|
+| 2026-11-10 / 2026-11-05 | Gen | IDE 1.4.154 / CLI 3.1.0 | **Enterprise Management (preview)**: rules, settings and files delivered by the Kiro service from the AWS console (us-east-1 only); separate from `managed-settings.json` (Section 2.9) |
+| 2026-10-29 | Gen | — | **Managed updates** docs: `UpdateMode` / `UpdateUrl` for the IDE, `update.baseUrl` for the CLI, including the Windows registry locations |
+| 2026-10-28 | IDE | 1.4.62 | **Windows system-wide installers** (x64, ARM64); see [`intune-deployment.md`](intune-deployment.md) |
 | 2026-10-01 | Gen | — | **MCP registry** docs updated: exact version pinning (ranges rejected; a local server at another version is relaunched at the registry version); applies to the IDE and CLI, not Kiro Web |
 | 2026-09-30 | IDE | 1.2 (1.2.4) | **Enterprise sign-in controls** in `managed-settings.json`; Workflows (off by default) |
 | 2026-09-30 | CLI | 2.26.0 | Workflows (opt-in); deprecation notice for Classic sessions |
@@ -79,6 +88,12 @@ See the model approval matrix in Section 2.2.1.
 
 | Date | Surface | Version | Feature |
 |------|---------|---------|---------|
+| 2026-11-18 | IDE | 1.4.236 | **`PermissionRequest` hooks** and Pre Tool Use `updatedInput` rewrites (as in CLI 3.4.0); organization sign-in for MCP |
+| 2026-11-17 | CLI | 3.5.0 | **Custom sign-in portal** for browser sign-in: the `AuthPortalUrl` OS policy (Windows: `HKLM\SOFTWARE\Policies\Kiro`) or `auth_portal_url` in `managed-settings.json`; an invalid value falls back to the default portal. Organization sign-in for MCP |
+| 2026-11-16 | CLI | 3.4.0 | **Hooks that rewrite tool inputs** (`updatedInput`, which keeps the normal permission checks) and **answer permission prompts** (`PermissionRequest`, which cannot answer a policy `deny` or a protected-path, organization or administration prompt); structured JSON decisions; `deny` or exit code 2 from any hook wins |
+| 2026-11-10 | IDE | 1.4.154 | Approve for Me and chat permission modes |
+| 2026-11-05 | CLI | 3.1.0 | `PostCompact` hook trigger |
+| 2026-11-03 | CLI | 3.0.0 | **V3 by default**; single `kiro-cli` binary; Classic interface and desktop app retired; "Approve for me" approves routine actions while deny, ask and allow rules still decide first |
 | 2026-10-05 | CLI | 2.28.0 | Switch Classic sessions to 3.0 (upgrades agent configs, makes 3.0 the default); **V3 hooks can match by category** or a specific MCP server/tool |
 | 2026-10-05 | IDE | 1.2.37 | Latest IDE 1.2 patch (the changelog lists no security-specific change) |
 | 2026-10-01 | CLI | 2.27.0 | Tighter access to local Kiro state; steering file references follow the session's file-read policy |
@@ -229,7 +244,9 @@ message counts; console shows user emails; subscription data is CSV-exportable.
   agent and session `allow` (`deny > ask > allow`). Headless runs treat `ask` as
   `deny`.
 - Permission rules fail closed (a malformed file, an `allow` effect or an unknown
-  field blocks all tool calls); sign-in controls fail open.
+  field blocks all tool calls); the sign-in method restriction fails open, while
+  the sign-in portal (`auth_portal_url` / `AuthPortalUrl`, CLI 3.5.0+) falls back
+  to the default portal instead.
 - Client-enforced: a user with local administrator rights can circumvent it.
 - Reference: [`permissions-and-managed-settings.md`](permissions-and-managed-settings.md);
   deployable files: [`../managed-settings/`](../managed-settings/).
@@ -262,6 +279,32 @@ message counts; console shows user emails; subscription data is CSV-exportable.
   not document Kiro event source names or data events. Verify in your own account.
   MCP tools run on the client and do not appear in CloudTrail.
 
+### 2.9 Enterprise Management (preview)
+
+Source: https://kiro.dev/docs/enterprise/enterprise-management/ (checked 2026-11-19).
+
+- **What:** rules (allow, deny or ask per capability, scoped to everyone, a group
+  or a user), settings (values every client uses, optionally locked) and files
+  (steering, Skills and Powers) defined in the AWS console (**Kiro > Controls**)
+  and delivered by the Kiro service to the IDE, CLI and Kiro Web.
+- **Availability:** preview in **us-east-1 only**; on for new profiles there,
+  opt-in for existing profiles with IAM Identity Center or an external IdP.
+  Clients: **IDE 1.4.154+ and CLI 3.1.0+** (and Kiro Crew LTS). Migrating an
+  existing profile is **one-way**.
+- **Separate from `managed-settings.json`:** Kiro states that the client-side file
+  is a separate mechanism. Some capabilities are decided by the service on every
+  client; others ("Client rollout") are enforced by the client and, like any
+  client-side control, can be circumvented with local administrator rights.
+- **Defaults:** models and API keys are denied until a rule allows them, but the
+  controls Kiro creates for a new profile allow every model, so review them
+  before rollout. Files, shell, web and MCP keep Kiro's own defaults until a rule
+  names them.
+- **Positioning:** it may take over layer 4b (console settings) and steering
+  distribution. Keep `managed-settings.json` (layer 4a) as the device-level
+  baseline: it does not depend on the profile region or on the one-way
+  migration, and Enterprise Management is not available to profiles outside
+  us-east-1 (for example eu-central-1).
+
 ---
 
 ## 3. Identity & Authentication
@@ -273,7 +316,7 @@ message counts; console shows user emails; subscription data is CSV-exportable.
   CLI 2.25+) and block the social sign-in host
   (`cognito-identity.us-east-1.amazonaws.com`) at the firewall. Do not block
   `prod.us-east-1.auth.desktop.kiro.dev`: all sign-in methods use it.
-  Sign-in controls fail open and do not apply to Kiro Web.
+  The sign-in method restriction fails open and does not apply to Kiro Web.
 - **Device Flow / Remote Auth** (CLI 1.24.0, 2.1): For SSH/SSM/container/VDI
   sessions without port forwarding. Useful for Amazon WorkSpaces VDI.
 

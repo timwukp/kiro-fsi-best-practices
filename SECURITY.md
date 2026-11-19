@@ -99,15 +99,22 @@ Runs on every pull request to `main`, on pushes to `main` and on manual dispatch
 - **validate-skills**: Skill frontmatter and the PII pattern regression tests
   (`.kiro/skills/pii-detection/tests/patterns.test.sh`).
 - **validate-governance**: agent-hook regression tests, `agent-hooks/SHA256SUMS` verification,
-  managed-settings JSON validity with deny/ask-only effects, hook/agent JSON validity, the MDM
+  managed-settings JSON validity with deny/ask-only effects, the admin policy regression tests
+  (`managed-settings/tests/test-policy.sh`), hook/agent JSON validity, the MDM
   lockdown dry-run tests (non-root, no system changes) and `bash -n` on every shell script.
+- **validate-windows** (`windows-latest`): a PowerShell parse check of every tracked `.ps1`,
+  `agent-hooks/SHA256SUMS` verification on a Windows checkout, and, under Windows PowerShell 5.1 and
+  PowerShell 7, `mdm/tests/test-lockdown-windows.ps1` in its default mode (writes only under
+  `%TEMP%` and an `HKCU` test key; the Intune wrapper exit-code mapping included) and the PowerShell
+  hook guard tests (`agent-hooks/tests/run-tests.ps1`).
 
 ### Integration test (manual, sandbox AWS account)
 
 CI has no AWS credentials and makes no system changes. The checks that need a real host or account are in
 [`security-tests/aws-integration/`](security-tests/aws-integration/README.md), run manually in a
-**sandbox account only**. It covers a real CDK deployment, the root and SYSTEM MDM lockdowns, the full
-chaos harness, the DNS Firewall egress mode and the Kiro CLI behind the allowlist.
+**sandbox account only**. It covers a real CDK deployment, the root and SYSTEM MDM lockdowns, the Intune flow
+(staging, detection and remediation wrappers) and the PowerShell hook guards on a Windows Server runner,
+the full chaos harness, the DNS Firewall egress mode and the Kiro CLI behind the allowlist.
 
 The test environment is isolated:
 - the runners are reachable only through Systems Manager (no inbound rules, no SSH keys);

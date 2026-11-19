@@ -15,6 +15,7 @@ MAS-aligned best practices for deploying **AWS Kiro** in Singapore **financial s
 | Kiro console governance (models, MCP registry, web tools, API keys, Cloud Sessions) + model approval matrix | `kiro-docs/security-governance-features.md` |
 | Defense-in-depth hooks and the reference agent | `agent-hooks/README.md`, `agent-hooks/hooks/banking-guards.json` |
 | Deploy managed files with MDM (all OSes) | `kiro-docs/mdm-endpoint-enforcement.md`, `mdm/` |
+| Windows with Microsoft Intune (system-wide installer, Win32 app + staging, Remediations wrappers, `UpdateMode`, per-user hooks) | `kiro-docs/intune-deployment.md`, `mdm/lockdown-windows.ps1`, `mdm/intune/` |
 | MCP governance (registry, pinned versions, config files) | `Kiro-Banking-Best-Practices-Part2.md` Section 5, `kiro-docs/mcp-security.md` |
 | Auth, network & VDI (Sections 1–4) | `Kiro-Agentic-SDLC-Banking-Best-Practices.md` |
 | MCP, SDLC, PDPA, FEAT (Sections 5–14) | `Kiro-Banking-Best-Practices-Part2.md` |
@@ -28,7 +29,7 @@ MAS-aligned best practices for deploying **AWS Kiro** in Singapore **financial s
 - **Never commit secrets/PII** (real keys, NRIC, tokens, account IDs). Use placeholders: `example.com`, `AKIA…EXAMPLE`, `123456789012`.
 - **Do not track** anything under `.kiro/specs/`, `.kiro/hooks/`, or `.kiro/settings/` (CI rejects it). `.kiro/skills/` and `.kiro/steering/` **are** committed.
 - Agent **hooks live in top-level `agent-hooks/`**, not `.kiro/hooks/`; admin policy files live in `managed-settings/`.
-- **Admin rules (`managed-settings*.json`) use only `deny` or `ask`** and only the documented fields; an `allow` rule or unknown field makes Kiro reject the whole file and deny all tool calls.
+- **Admin rules (`managed-settings*.json`) use only `deny` or `ask`** and only the documented fields; an `allow` rule or unknown field makes Kiro reject the whole file and deny all tool calls. Make every rule change in **both** policy files (they differ only in rule 1), keep patterns free of backslashes, start shell patterns with the command name, and update the rule table in `managed-settings/README.md` and `managed-settings/tests/shell-vectors.tsv`.
 - **Kiro claims:** cite the official kiro.dev page with a verification date; where pages conflict, follow the newer one and note the conflict. Do not call a control "tamper-proof" or "fail-closed" unless Kiro documents it as such.
 - **Changes go through a pull request** from a feature branch; never push to `main`. CI (`.github/workflows/validate.yml`) must pass. Run the commands below first.
 - **Docs move with the change:** in the same pull request, update `README.md`, `CHANGELOG.md` and every doc that describes the changed behaviour, command, count or status. That includes `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md` (CI description), component READMEs, the `kiro-docs/README.md` index and the evidence pages. Search for the old wording (`grep -rn`) before you finish. If a follow-up is needed, open a new pull request.
@@ -42,8 +43,11 @@ MAS-aligned best practices for deploying **AWS Kiro** in Singapore **financial s
 | Agent hooks (bash + jq) | `bash agent-hooks/tests/run-tests.sh` | `PASS=98 FAIL=0` |
 | PII skill patterns (grep -E; perl for PCRE) | `bash .kiro/skills/pii-detection/tests/patterns.test.sh` | `PASS=346 FAIL=0` |
 | MDM dry run (non-root, no system changes) | `bash mdm/tests/test-lockdown.sh` | `FAIL=0` |
+| Windows MDM + Intune wrappers (Windows only; CI job `validate-windows`) | `powershell -ExecutionPolicy Bypass -File mdm\tests\test-lockdown-windows.ps1` | `FAIL=0` |
+| PowerShell hook guards (Windows only; CI job `validate-windows`) | `powershell -ExecutionPolicy Bypass -File agent-hooks\tests\run-tests.ps1` | `FAIL=0` |
 | Hook manifest | `(cd agent-hooks && shasum -a 256 -c SHA256SUMS)` | all `OK` |
 | Admin policy effects | `jq -e '[.rules[].effect] \| all(. == "deny" or . == "ask")' managed-settings/managed-settings*.json` | `true` |
+| Admin policy structure, README rule table and shell vectors | `bash managed-settings/tests/test-policy.sh` | `FAIL=0` |
 
 ## Hard rules for `cdk/`
 - **cdk-nag** `AwsSolutionsChecks` is enabled by default and every stack must pass it; a suppression needs a written reason.

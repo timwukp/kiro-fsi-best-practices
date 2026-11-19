@@ -222,6 +222,9 @@ jobs:
           done
           exit $ERRORS
 
+      - name: Admin policy regression tests (structure, README table, shell vectors)
+        run: bash managed-settings/tests/test-policy.sh
+
       - name: Validate agent-hooks JSON
         run: |
           ERRORS=0
@@ -246,3 +249,65 @@ jobs:
             fi
           done < <(git ls-files '*.sh')
           exit $ERRORS
+
+  validate-windows:
+    name: Validate Windows (MDM script, Intune wrappers, PowerShell hooks)
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      # SHA256SUMS pins LF files; .gitattributes keeps them LF, this guards older checkouts too.
+      - name: Disable CRLF conversion
+        run: git config --global core.autocrlf false
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: PowerShell syntax check (all tracked .ps1)
+        shell: pwsh
+        run: |
+          $errors = 0
+          foreach ($f in (git ls-files '*.ps1')) {
+            $tokens = $null; $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f).Path, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            foreach ($e in $parseErrors) { Write-Output "::error file=$f,line=$($e.Extent.StartLineNumber)::$($e.Message)"; $errors++ }
+          }
+          exit $errors
+
+      - name: Verify agent-hooks/SHA256SUMS
+        shell: pwsh
+        working-directory: agent-hooks
+        run: |
+          $bad = 0
+          foreach ($line in Get-Content SHA256SUMS) {
+            if ($line -notmatch '^([0-9a-f]{64}) [ *](.+)$') { Write-Output "::error::malformed line: $line"; $bad++; continue }
+            $have = (Get-FileHash -Algorithm SHA256 -LiteralPath $Matches[2]).Hash.ToLowerInvariant()
+            if ($have -ne $Matches[1]) { Write-Output "::error file=agent-hooks/$($Matches[2])::hash mismatch"; $bad++ }
+          }
+          exit $bad
+
+      - name: MDM tests (Windows PowerShell 5.1; non-admin mode, writes only under %TEMP% and HKCU test key)
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File mdm\tests\test-lockdown-windows.ps1
+          exit $LASTEXITCODE
+
+      - name: MDM tests (PowerShell 7)
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File mdm\tests\test-lockdown-windows.ps1
+          exit $LASTEXITCODE
+
+      - name: PowerShell hook tests (Windows PowerShell 5.1)
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File agent-hooks\tests\run-tests.ps1
+          exit $LASTEXITCODE
+
+      - name: PowerShell hook tests (PowerShell 7)
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File agent-hooks\tests\run-tests.ps1
+          exit $LASTEXITCODE

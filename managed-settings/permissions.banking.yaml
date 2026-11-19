@@ -1,7 +1,7 @@
 # Kiro user-scope permissions template for banking developers
 #
 # Install as:  ~/.kiro/settings/permissions.yaml   (one file per user)
-# Applies to:  Kiro IDE 1.0+ and Kiro CLI V3 sessions (kiro-cli --v3)
+# Applies to:  Kiro IDE 1.0+ and the Kiro CLI V3 agent harness (default in CLI 3.0.0+; kiro-cli --v3 in CLI 2.x and for headless runs)
 # Reference:   https://kiro.dev/docs/permissions/  (last verified 2026-10-08)
 #
 # What this file is for
