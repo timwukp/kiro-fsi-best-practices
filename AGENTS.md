@@ -22,6 +22,7 @@ MAS-aligned best practices for deploying **AWS Kiro** in Singapore **financial s
 | Build a MAS-aligned Kiro Skill | `Banking-Skills-Development-Guide.md` |
 | Red-team / validate the controls (chaos test) | `security-tests/chaos/run-chaos.sh`, `kiro-docs/chaos-pentest-evidence.md` |
 | Integration test in a sandbox AWS account (EC2 runners, real CDK deploy, teardown) | `security-tests/aws-integration/README.md`, `kiro-docs/aws-integration-test-evidence.md` |
+| Validate Kiro on a Windows 11 client (W2 kit, issue #43: installer, policy enforcement, global hooks, steering, Intune contexts). Not yet run on Windows 11; its automatable part also runs as the opt-in integration-test stage `client` (WC) | `security-tests/windows-client/README.md`, `security-tests/windows-client/W2-manual-checklist.md` |
 | Deploy infrastructure | `cdk/` (see `cdk/README.md`) |
 | MAS TRM mapping | `README.md` → "Compliance Framework" |
 

@@ -19,6 +19,7 @@
 | [kiro-docs/agent-runtime-governance.md](kiro-docs/agent-runtime-governance.md) | Layer 4 | How admin policy, console settings, workspace trust, permissions, hooks and audit fit together |
 | [kiro-docs/permissions-and-managed-settings.md](kiro-docs/permissions-and-managed-settings.md) | -- | Permission rules and precedence, sign-in controls, hooks, custom agents (Kiro 1.x) |
 | [mdm/](mdm/) | -- | MDM lockdown scripts for Windows, macOS and Linux (official paths, drift check, dry-run tests) and Intune wrappers (`mdm/intune/`); guides: [kiro-docs/mdm-endpoint-enforcement.md](kiro-docs/mdm-endpoint-enforcement.md), [kiro-docs/intune-deployment.md](kiro-docs/intune-deployment.md) (Windows / Intune) |
+| [security-tests/windows-client/](security-tests/windows-client/README.md) | -- | Windows client validation kit (W2, issue #43): script, hook probe and manual checklist for a Windows 11 test device with Kiro installed. Not yet run on a Windows 11 client |
 
 ---
 

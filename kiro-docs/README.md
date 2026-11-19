@@ -36,7 +36,7 @@ The reference snapshots above describe Kiro behaviour. The deployable files that
 | [`../managed-settings/`](../managed-settings/) | Admin policy `managed-settings.json` (Option A: IAM Identity Center; Option B: external IdP), user `permissions.yaml` template, MCP registry example, deployment paths and validation commands |
 | [`../agent-hooks/`](../agent-hooks/) | Hook scripts and the `banking-secure` custom agent |
 | [`../mdm/`](../mdm/) | MDM / endpoint scripts that deploy the policy to the official OS paths; Intune detection and remediation wrappers in `mdm/intune/` |
-| [`../security-tests/`](../security-tests/) | Chaos harness (`chaos/`) and the sandbox-account integration test (`aws-integration/`) |
+| [`../security-tests/`](../security-tests/) | Chaos harness (`chaos/`), the sandbox-account integration test (`aws-integration/`) and the Windows client validation kit (`windows-client/`: W2, issue #43; not yet run on a Windows 11 client) |
 
 ## Maintenance
 

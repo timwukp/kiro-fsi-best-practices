@@ -10,6 +10,10 @@
 #   linux       run L1 (CI parity), L2 (root MDM), L3 (chaos) on the Linux runner
 #   linux:<P>   run a single Linux phase (setup, L1, L2, L3) after fixing a failure
 #   windows     run W1, W3 and W4 on the Windows runner
+#   client      OPT-IN, never part of "all" (name it in its own call, after bundle): run WC on the Windows
+#               runner. Downloads the current Kiro IDE system-wide installer and runs the automatable part
+#               of the W2 kit (security-tests/windows-client) as SYSTEM. Windows Server 2022, no signed-in
+#               Kiro client: installer mechanics only. IT_WC_UNINSTALL=1 also runs the uninstall command.
 #   deploy      cdk bootstrap (if missing) + offline cdk synth + CloudFormation deploy of all 5 stacks
 #               (env=dev, singleton flags from preflight)
 #   verify      verify-deploy.sh against the deployed stacks (C1)
@@ -19,7 +23,11 @@
 #   leftovers   scan for anything left behind (expects only KMS keys pending deletion)
 #
 # Environment: IT_REGION (default ap-southeast-1; an inherited AWS_REGION is ignored), AWS_PROFILE (optional),
-#              IT_WORKDIR (default $TMPDIR/kiro-fsi-it) for state and logs (never committed).
+#              IT_WORKDIR (default $TMPDIR/kiro-fsi-it) for state and logs (never committed),
+#              IT_WC_UNINSTALL (default unset; 1 = the client stage uninstalls Kiro at its end),
+#              IT_WC_STOP_KIRO (1 = the client stage stops Kiro processes before the install and the uninstall),
+#              IT_WC_INSTALLER_ARGS (replaces ALL default installer switches of the kit, including /LOG;
+#              letters, digits, space and / = ! . : \ _ - only, no quotes).
 # Exit code: non-zero if any stage reports a failure.
 
 set -u
@@ -84,7 +92,7 @@ set +e
 bash repo/security-tests/aws-integration/linux-suite.sh $1 /opt/kiro-test/repo
 EOF
 }
-windows_cmd() {
+windows_cmd() { # [suite file] [PowerShell line to run before the suite]
   cat <<EOF
 \$ErrorActionPreference = 'Stop'
 New-Item -ItemType Directory -Force C:\\kiro-test | Out-Null
@@ -93,7 +101,8 @@ New-Item -ItemType Directory C:\\kiro-test\\repo | Out-Null
 Read-S3Object -BucketName $BUCKET -Key bundle/repo.tgz -File C:\\kiro-test\\repo.tgz -Region $R | Out-Null
 tar.exe -xzf C:\\kiro-test\\repo.tgz -C C:\\kiro-test\\repo
 \$ErrorActionPreference = 'Continue'
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\kiro-test\\repo\\security-tests\\aws-integration\\windows-suite.ps1 -RepoDir C:\\kiro-test\\repo
+${2:-}
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\kiro-test\\repo\\security-tests\\aws-integration\\${1:-windows-suite.ps1} -RepoDir C:\\kiro-test\\repo
 exit \$LASTEXITCODE
 EOF
 }
@@ -144,6 +153,22 @@ st_linux() {
 st_windows() {
   [ -n "${WIN_ID:-}" ] && [ "$WIN_ID" != None ] || { log "no Windows runner"; return; }
   ssm_run "$WIN_ID" AWS-RunPowerShellScript windows "$(windows_cmd)" 3600 || RC=1
+}
+st_client() {
+  [ -n "${WIN_ID:-}" ] && [ "$WIN_ID" != None ] || { log "no Windows runner"; return; }
+  local pre=""
+  [ "${IT_WC_UNINSTALL:-0}" = 1 ] && pre="\$env:KIRO_WC_UNINSTALL = '1'"
+  [ "${IT_WC_STOP_KIRO:-0}" = 1 ] && pre="${pre:+$pre; }\$env:KIRO_WC_STOP_KIRO = '1'"
+  # Other installer switches to try (letters, digits and / = ! . : \\ - _ and spaces only; no quotes).
+  if [ -n "${IT_WC_INSTALLER_ARGS:-}" ]; then
+    case "$IT_WC_INSTALLER_ARGS" in *[!A-Za-z0-9\ /=!.:\\_-]*) die "IT_WC_INSTALLER_ARGS contains a character that is not allowed" ;; esac
+    pre="${pre:+$pre; }\$env:KIRO_WC_INSTALLER_ARGS = '$IT_WC_INSTALLER_ARGS'"
+  fi
+  ssm_run "$WIN_ID" AWS-RunPowerShellScript windows-client "$(windows_cmd windows-client-suite.ps1 "$pre")" 3600 || RC=1
+  # ssm_run prints FAIL, SKIP and PHASE lines only; what this stage records is in its INFO lines
+  # and in the suite's own PASS lines (installer version, size and hash).
+  grep -E '^(NOTE |CHECK [^ ]+ INFO( |$)|CHECK WC\.[^ ]+ PASS( |$))' "$W/logs/windows-client.stdout" | mask || true
+  log "the summary is masked (a four-part version or 12 digits in a row inside a hash are replaced); exact values: $W/logs/windows-client.stdout"
 }
 cdk_flags() {
   local f="-c env=$ENVN"
@@ -377,16 +402,17 @@ st_leftovers() {
 }
 
 # --------------------------------------------------------------------- main
-[ $# -ge 1 ] || { sed -n '2,24p' "$0"; exit 1; }
+[ $# -ge 1 ] || { sed -n '2,32p' "$0"; exit 1; }
 for stage in "$@"; do
   case "$stage" in
-    all) set -- preflight up bundle linux windows deploy verify egress ;;
+    all) set -- preflight up bundle linux windows deploy verify egress ;;   # "client" is opt-in: not here
   esac
 done
 for stage in "$@"; do
   log "===== stage: $stage"
   case "$stage" in
     preflight) st_preflight ;; up) st_up ;; bundle) st_bundle ;; linux) st_linux ;; windows) st_windows ;;
+    client) st_client ;;
     linux:*) ssm_run "$LINUX_ID" AWS-RunShellScript "linux-${stage#linux:}" "$(linux_cmd "${stage#linux:}")" 3600 || RC=1 ;;
     deploy) st_deploy ;; verify) st_verify ;; egress) st_egress ;; down) st_down ;; leftovers) st_leftovers ;;
     *) die "unknown stage: $stage" ;;

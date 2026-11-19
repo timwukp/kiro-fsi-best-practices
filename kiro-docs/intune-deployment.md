@@ -4,7 +4,7 @@ Runbook for deploying Kiro, the admin policy (`managed-settings.json`) and the o
 
 > **Last verified:** 2026-11-19 against the official documentation: Kiro [managed updates](https://kiro.dev/docs/enterprise/managed-updates/) (page updated 2026-10-29), the [IDE 1.4.62 changelog](https://kiro.dev/changelog/ide/1-4-62/), [IDE troubleshooting](https://kiro.dev/docs/ide/troubleshooting/), [hooks](https://kiro.dev/docs/hooks/), [hook types](https://kiro.dev/docs/hooks/types/) and [steering](https://kiro.dev/docs/steering/); Microsoft Learn [Remediations](https://learn.microsoft.com/en-us/intune/intune-service/fundamentals/remediations), [Win32 app management](https://learn.microsoft.com/en-us/intune/intune-service/apps/apps-win32-add) and [registry keys affected by WOW64](https://learn.microsoft.com/en-us/windows/win32/winprog64/shared-registry-keys). Also Kiro [sign-in controls](https://kiro.dev/docs/enterprise/governance/sign-in/) and [installation](https://kiro.dev/docs/getting-started/installation/), and Microsoft Learn [platform scripts](https://learn.microsoft.com/en-us/intune/intune-service/apps/powershell-scripts) and [Get-AuthenticodeSignature](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/get-authenticodesignature). Items marked *(verify)* are not documented by Kiro or Microsoft; test them on a pilot device.
 >
-> **What was tested, and what was not.** The scripts, the Intune wrappers and the PowerShell hook guards were run on **Windows Server 2022 as SYSTEM**, from 64-bit and 32-bit PowerShell ([evidence](aws-integration-test-evidence.md)). **Not tested:** Kiro IDE or Kiro CLI on Windows (no Kiro client was installed), a Windows 10/11 client, a logged-on standard user, and a real Intune tenant (its execution contexts were simulated). Everything this page says about Kiro's behaviour on Windows comes from Kiro's documentation or is marked *(verify)*; issue #43 tracks the Windows 11 client validation.
+> **What was tested, and what was not.** The scripts, the Intune wrappers and the PowerShell hook guards were run on **Windows Server 2022 as SYSTEM**, from 64-bit and 32-bit PowerShell ([evidence](aws-integration-test-evidence.md)). **Not tested:** Kiro IDE or Kiro CLI in use on Windows (integration phase WC installed the IDE on the runner, but nobody opened it or signed in), a Windows 10/11 client, a logged-on standard user, and a real Intune tenant (its execution contexts were simulated). Everything this page says about Kiro's behaviour on Windows comes from Kiro's documentation or is marked *(verify)*, except the installer values in section 1, which phase WC measured on Windows Server 2022. The Windows 11 client validation (issue #43) is prepared as a test kit, W2, in [`../security-tests/windows-client/`](../security-tests/windows-client/README.md): a script, a hook probe and a manual checklist for a Windows 11 test device with Kiro installed. A run of that kit is the way to settle the *(verify)* items about the installer, policy enforcement, global hooks and steering. **The kit has not been run on a Windows 11 client yet.** Its automatable part was run on the Windows Server 2022 runner (integration phase WC), which settled the installer mechanics in [section 1](#1-kiro-ide-per-user-vs-system-wide-installer); the markers about Kiro's own behaviour (policy enforcement, global hooks, steering, the per-user build) still stand.
 
 ## The Intune objects
 
@@ -47,25 +47,40 @@ The IDE troubleshooting page says "Kiro does not support system-level installati
 | Win32 app setting | Value |
 |-------------------|-------|
 | Package | The system-wide installer for the device architecture (x64 or ARM64), wrapped with `IntuneWinAppUtil.exe` |
-| Install command | `<installer>.exe /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /LOG="C:\ProgramData\Microsoft\IntuneManagementExtension\Logs\kiro-install.log"` *(verify: these are Inno Setup switches; Kiro does not document the installer technology)* |
-| Uninstall command | `"C:\Program Files\Kiro\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART` *(verify the path)* |
+| Install command | `<installer>.exe /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /MERGETASKS=!runcode /LOG="C:\ProgramData\Microsoft\IntuneManagementExtension\Logs\kiro-install.log"` (measured: exit code 0 after 48 to 53 seconds in seven installs and after 91 seconds in one, on a runner that had come online a few minutes before. **Keep `/MERGETASKS=!runcode`:** without it the installer starts Kiro when it finishes, and under Intune that Kiro runs as SYSTEM. These are Inno Setup switches; Kiro does not document them) |
+| Uninstall command | `"C:\Program Files\Kiro\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART` (measured: exit code 0 within seconds; the install folder and the Uninstall entry are removed. Exit code 1 while Kiro is running) |
 | Install behaviour | **System** |
-| Detection rule | File: `C:\Program Files\Kiro`, file `Kiro.exe`, "File or folder exists" *(verify the install path and file name)* |
+| Detection rule | File: `C:\Program Files\Kiro`, file `Kiro.exe`, "File or folder exists" (measured path and file name). For version-aware detection use the file version of `Kiro.exe`, which equals the release (1.4.236) |
 | Requirements | Architecture matching the package; one app per architecture |
 | Minimum version | **IDE 1.4.62** (first release with the system-wide installer) |
+
+**What the installer does** (measured on 2026-11-19 with the Kiro IDE 1.4.236 x64 system-wide installer on Windows Server 2022, which is outside Kiro's listed operating systems (integration phase WC, [evidence](aws-integration-test-evidence.md#wc--kiro-installer-mechanics-windows-runner-system)); confirm on Windows 10/11):
+
+| Item | Measured |
+|------|----------|
+| Technology | Inno Setup: the Uninstall key name ends in `_is1` and the uninstaller is `unins000.exe` |
+| Install folder | `C:\Program Files\Kiro`, with `Kiro.exe` (file version = release) and `bin\` |
+| Uninstall entry | `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{ECDD7648-5B69-4BDC-9D21-C3452CE76CD2}_is1` in the **64-bit (native) registry view**; `DisplayName` Kiro, `DisplayVersion` the release, `UninstallString` `"C:\Program Files\Kiro\unins000.exe"`. Whether the key name is the same for other releases and for ARM64 was not checked *(verify)* |
+| PATH and shortcuts | `C:\Program Files\Kiro\bin` is added to the machine PATH; one Start Menu shortcut for all users |
+| Signature | Authenticode status Valid; signer subject, the full string as Windows prints it: `CN="Amazon.com, Inc.", OU=AWS Kiro, O="Amazon.com, Inc.", L=Seattle, S=Washington, C=US, SERIALNUMBER=2620453, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.2=Delaware, OID.1.3.6.1.4.1.311.60.2.1.3=US`; certificate thumbprint `936E025D82E8C1A04C1AFF51FBA6D5F72455C512`, valid until 2027-03-26, so expect a new certificate after that; issuer DigiCert Trusted G4 Code Signing RSA4096 SHA384 2021 CA1. `Kiro.exe` carries the same signer |
+| After a silent install | **With the default tasks the installer starts Kiro.** Installed as SYSTEM, eight `Kiro.exe` processes were left running as SYSTEM in session 0. With `/MERGETASKS=!runcode` no Kiro process is started (checked on a fresh install and on an install over an existing one) |
+| While Kiro is running | Measured with the Kiro processes that the installer itself had started (as SYSTEM, in session 0): the silent install ends after 1 to 2 seconds with **exit code 1**, the silent uninstall ends at once with **exit code 1**, and neither changes anything. The installer log says "Setup has detected that Kiro is currently running"; in silent mode that prompt defaults to Cancel |
+| Install over an existing install | Exit code 0 when Kiro is not running |
+
+What follows for Intune: expect an update by supersedence and an uninstall to fail with exit code 1 while Kiro is running. This was measured only with Kiro running in the installer's own session (session 0). Whether the installer also detects a Kiro that a logged-on user has open in another session, and how Intune reports and retries the failure, was not tested *(verify)*. Decide how updates reach such devices (for example a maintenance window, or asking users to close Kiro); Inno Setup's `/CLOSEAPPLICATIONS` and `/FORCECLOSEAPPLICATIONS` switches were not tested *(verify)*, and force-closing an editor can lose unsaved work.
 
 **Get and check the installer before packaging.** Kiro's installation page says only to download the installer from kiro.dev; it documents no direct URL for the system-wide build, and Kiro publishes no checksum or signer name for the Windows installer. Create your own baseline and check every new version against it:
 
 ```powershell
 $sig = Get-AuthenticodeSignature .\<installer>.exe
 $sig.Status                      # must be Valid
-$sig.SignerCertificate.Subject   # must equal the subject your organisation recorded for the Kiro installer
+$sig.SignerCertificate.Subject   # must equal the subject your organisation recorded (see the table above for 1.4.236)
 Get-FileHash .\<installer>.exe -Algorithm SHA256   # record with the package
 ```
 
 `Valid` alone is not a publisher check: a correctly signed file from any publisher reports `Valid`. The comparison of the signer subject (and, if you pin it, the certificate thumbprint) with your recorded value is the actual check.
 
-**Registry detection rules and the 32-bit view.** The detection rule above is a file rule. If you use a registry rule on the installer's Uninstall entry instead, note that `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` is **redirected** under WOW64 (it inherits this from `HKLM\SOFTWARE`; Microsoft's table has no row of its own for it): a 32-bit installer registers under `HKLM\SOFTWARE\WOW6432Node\...\Uninstall`. The Intune setting "Associated with a 32-bit app on 64-bit clients" (default No, the 64-bit registry) must match the view the installer used; record which view the Kiro entry is in *(verify)*. This is also why the commands in this runbook start 64-bit PowerShell. It does not affect `HKLM\SOFTWARE\Policies`, which is a shared key ([section 2](#2-registry-policies-managed-updates-and-sign-in-portal)).
+**Registry detection rules and the 32-bit view.** The detection rule above is a file rule. If you use a registry rule on the installer's Uninstall entry instead, note that `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` is **redirected** under WOW64 (it inherits this from `HKLM\SOFTWARE`; Microsoft's table has no row of its own for it): a 32-bit installer registers under `HKLM\SOFTWARE\WOW6432Node\...\Uninstall`. The Intune setting "Associated with a 32-bit app on 64-bit clients" (default No, the 64-bit registry) must match the view the installer used. The x64 system-wide installer registers in the 64-bit view (measured, see above), so leave the setting at No. This is also why the commands in this runbook start 64-bit PowerShell. It does not affect `HKLM\SOFTWARE\Policies`, which is a shared key ([section 2](#2-registry-policies-managed-updates-and-sign-in-portal)).
 
 **Devices that already have the per-user build.** Kiro does not document how the per-user and system-wide builds coexist or how to move from one to the other. Expected, all *(verify)*: the per-user build registers under HKCU and installs under the user's profile, so an uninstall has to run in that user's context before or after the system-wide build is deployed. Kiro's statement that "settings, extensions, and sign-in state are preserved across reinstalls" appears under "Downgrade to a previous version" and describes reinstalling the same build; whether it holds when switching builds is not documented. Test the order and the result on a pilot device before a fleet rollout.
 
@@ -253,10 +268,15 @@ foreach ($p in $profiles) {
 | An existing Windows clone still fails the `SHA256SUMS` check after `.gitattributes` was added | The working tree still has CRLF files; `.gitattributes` applies when files are checked out. Clone afresh, or, with no uncommitted work, run `git rm -rq --cached .` followed by `git reset --hard` |
 | Remediations shows `staged script not found` | The Kiro policy app is not installed on the device, or it was uninstalled |
 | Users do not see Kiro after the IDE app installed | The per-user build was deployed in System context; use the system-wide installer *(verify)* |
+| The Kiro IDE install, update or uninstall fails with exit code 1 within a few seconds | Kiro is running on the device (measured with Kiro running in session 0; a Kiro that a logged-on user has open *(verify)*). The installer log (`/LOG=`) says "Setup has detected that Kiro is currently running". Close Kiro and retry |
+| `Kiro.exe` processes run as SYSTEM after the install | The install command lacks `/MERGETASKS=!runcode`, so the installer started Kiro. Add the switch; stop the processes or restart the device |
 
 ## 7. Pilot checklist
 
+The W2 kit in [`../security-tests/windows-client/`](../security-tests/windows-client/README.md) runs most of these items on a Windows 11 **test device** and records the results: `Invoke-W2Checks.ps1` for the installer, the registry, the policy file and the wrappers in the Intune execution contexts, and `W2-manual-checklist.md` for the steps in the Kiro window. Its table "Where confirmed values go" names the place in this page that each check W2.1 to W2.10 settles. The kit needs no Intune tenant, so the items about Intune itself (app installation status, reinstall after drift, supersedence) still need a pilot group. Nothing below has been confirmed on a Windows 11 client yet.
+
 - [ ] Kiro IDE (system-wide, 1.4.62 or later) installs, appears for a standard user, and the detection rule finds it; record the real install path, uninstall path and silent switches.
+- [ ] An update or an uninstall of Kiro IDE while a standard user has Kiro open: record the installer's exit code and what Intune then reports and retries (on the test runner both ended with exit code 1 while Kiro ran in session 0).
 - [ ] The Kiro policy app installs as System; `C:\ProgramData\Kiro\managed-settings.json` and the files under `C:\ProgramData\Kiro\deploy\` carry the Users deny ACE (folders have Users Read and Execute only, without a deny entry).
 - [ ] A standard user cannot modify or delete the policy or any staged file.
 - [ ] Kiro applies the policy (a denied command is blocked) and the sign-in restriction after a restart, and **no managed-settings warning appears** on the test device. A warning means the file was rejected: permission rules then block every tool call, while the sign-in method restriction is dropped (it fails open; see [Failure behaviour](../managed-settings/README.md#failure-behaviour)).
@@ -273,18 +293,20 @@ foreach ($p in $profiles) {
 
 ## Open questions
 
+Questions 1, 2, 3, 9 and 10 can be settled by a run of the W2 kit ([`../security-tests/windows-client/`](../security-tests/windows-client/README.md)) on a Windows 11 test device; the status column names the kit check. That run has not been done yet, so they stay open. After a run, the kit's section "Where confirmed values go" lists every place to update.
+
 | # | Question | Status (2026-11-19) |
 |---|----------|---------------------|
-| 1 | Official silent switches, install path and uninstall path of the system-wide installer | Open: confirm with Kiro or on a pilot device |
-| 2 | Does Kiro IDE load global hooks from `%USERPROFILE%\.kiro\hooks`? | Open: documented for CLI V3 only |
-| 3 | Which shell runs hook commands on Windows? | Open; the shipped command form works from cmd, PowerShell and Git Bash |
+| 1 | Official silent switches, install path and uninstall path of the system-wide installer | **Measured** for 1.4.236 x64 on Windows Server 2022 ([section 1](#1-kiro-ide-per-user-vs-system-wide-installer)); still to do: the same checks on Windows 10/11 and ARM64 (W2 kit: check W2.1), and a statement from Kiro, which documents none of this |
+| 2 | Does Kiro IDE load global hooks from `%USERPROFILE%\.kiro\hooks`? | Open: documented for CLI V3 only (W2 kit: check W2.7) |
+| 3 | Which shell runs hook commands on Windows? | Open; the shipped command form works from cmd, PowerShell and Git Bash (W2 kit: check W2.8) |
 | 4 | How is the Kiro CLI `update.baseUrl` policy delivered on Windows? | **Documented:** REG_SZ `update.baseUrl` in `HKLM\SOFTWARE\Policies\Kiro\CLI` ([managed updates](https://kiro.dev/docs/enterprise/managed-updates/)) |
 | 5 | Does blocking `prod.download.desktop.kiro.dev` affect the Powers registry or icons? | **Likely yes:** Kiro's firewall page (2026-11-18) lists the host for the Powers registry and icons, which conflicts with the managed-updates suggestion to block it. Confirm on a pilot device |
 | 6 | Does a 32-bit write to `HKLM\SOFTWARE\Policies\Kiro` (`UpdateMode`, `AuthPortalUrl`) land in the 64-bit view? | **Answered:** `HKLM\SOFTWARE\Policies` is a shared key ([WOW64](https://learn.microsoft.com/en-us/windows/win32/winprog64/shared-registry-keys)), and the integration test confirmed it on Windows Server 2022; the script writes the 64-bit view explicitly anyway |
 | 7 | Can the troubleshooting page's "does not support system-level installation" wording be updated? | Open: a request to Kiro |
 | 8 | Are Kiro IDE and CLI supported on Windows Server (the OS of AWS-provided WorkSpaces bundles)? | Open: Kiro lists Windows 10/11 for the IDE and Windows 11 for the CLI; confirm with Kiro or use BYOL Windows 11 |
-| 9 | How do the per-user and system-wide builds coexist, and what carries over when switching? | Open: not documented by Kiro |
-| 10 | Who owns a hook file that SYSTEM writes into a user profile, and does a new user get it from the Default profile? | Open: needs a Windows device (no Kiro required) |
+| 9 | How do the per-user and system-wide builds coexist, and what carries over when switching? | Open: not documented by Kiro (W2 kit: check W2.3) |
+| 10 | Who owns a hook file that SYSTEM writes into a user profile, and does a new user get it from the Default profile? | Open: needs a Windows device (no Kiro required; W2 kit: check W2.9, part B) |
 
 ## MAS TRM mapping
 
@@ -301,3 +323,4 @@ foreach ($p in $profiles) {
 - [`../mdm/lockdown-windows.ps1`](../mdm/lockdown-windows.ps1) and [`../mdm/intune/`](../mdm/intune/): the scripts.
 - [`../agent-hooks/README.md`](../agent-hooks/README.md): the guard hooks, including the PowerShell ports.
 - [`aws-integration-test-evidence.md`](aws-integration-test-evidence.md): results of the Windows run as SYSTEM.
+- [`../security-tests/windows-client/`](../security-tests/windows-client/README.md): the Windows client validation kit (W2, issue #43) for the pilot checklist and the open questions; not yet run on a Windows 11 client.

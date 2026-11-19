@@ -4,7 +4,7 @@ Results of the isolated integration test in [`security-tests/aws-integration/`](
 
 | Run | Scope | Section |
 |-----|-------|---------|
-| **2026-11-19** (v1.10) | Linux and Windows runners only: the Windows / Microsoft Intune change for issue #42 (MDM script, Intune wrappers, PowerShell hook guards, admin policy tests) and CI parity on Linux | [Run of 2026-11-19](#run-of-2026-11-19-v110-windows-and-intune) |
+| **2026-11-19** (v1.10) | Linux and Windows runners only: the Windows / Microsoft Intune change for issue #42 (MDM script, Intune wrappers, PowerShell hook guards, admin policy tests) and CI parity on Linux. Added the same day on further harnesses for issue #43: phase WC, Kiro installer mechanics | [Run of 2026-11-19](#run-of-2026-11-19-v110-windows-and-intune) |
 | **2026-10-10** (v1.9.1) | Full test: runners, a real deployment of all 5 CDK stacks, the DNS Firewall egress mode and the Kiro CLI behind the allowlist | [Run of 2026-10-10](#run-of-2026-10-10-v191-full-test) |
 
 > **Sanitized.** Account IDs, ARNs, instance, VPC, subnet and key IDs, IP addresses, bucket names and SSM command IDs are removed. The CHECK/PHASE lines below are verbatim apart from that. Raw logs stayed in the test's results bucket (7-day expiry, deleted at teardown) and on the operator's machine, and are not committed. No Kiro API key or other secret was used in, or written to, any log. The two SHA-256 values in the `W4.detect-drift` CHECK line are the hash of this repository's public policy file (`managed-settings/managed-settings.banking.json`) and the hash of the copy the suite tampered with (the same file with one space and a line ending appended); neither is derived from account data.
@@ -22,12 +22,12 @@ Results of the isolated integration test in [`security-tests/aws-integration/`](
 | Hook guards, fed crafted hook events (unit tests) | Tested: bash guards (L1) | Tested: PowerShell guards (W3) | Not tested | Bash tests run on a developer Mac |
 | Hook guards invoked by a Kiro client | Not tested (K2 skipped) | Not tested | Not tested | Not tested |
 | Kiro CLI installed and locked down by the MDM script | Tested on 2026-10-10 (K1, CLI 2.29.0) | Not tested | Not tested | Not tested |
-| Kiro IDE installed; the system-wide installer | — | Not tested | Not tested | Not tested |
+| Kiro IDE installed; the system-wide installer | — | Tested (WC): installer mechanics only (signature, silent install, uninstall); Kiro was never opened by a user or signed in | Not tested | Not tested |
 | Kiro enforcing `managed-settings.json` (rules, sign-in restriction) | Not tested (K2 skipped: no Kiro API key) | Not tested | Not tested | Not tested |
 | Admin policy rules: structure and expected effect per command | Tested as a **simulation** of Kiro's documented matching (`managed-settings/tests/test-policy.sh`, L1.policy); it does not drive a Kiro client | Not run on Windows: the simulation ran on Linux only (the same policy file is deployed to every OS) | — | — |
 | CDK deployment, DNS Firewall egress, alarms, Config rules | Tested on 2026-10-10 (C1, C2) | — | — | — |
 
-The Windows 11 client validation (Kiro IDE and CLI installed, policy enforcement, global hooks, steering, a logged-on user) is tracked in issue #43. "W2" is reserved for it and is not used on this page.
+The Windows 11 client validation (Kiro IDE and CLI installed, policy enforcement, global hooks, steering, a logged-on user) is tracked in issue #43. Its test kit, phase "W2", is in [`security-tests/windows-client/`](../security-tests/windows-client/README.md): a script, a hook probe and a manual checklist that a person runs on a Windows 11 test device. **The kit has not yet been run on a Windows 11 client**, so the column "Windows 10/11 client" above still says "Not tested". The automatable part of the kit was run on the Windows Server 2022 runner; that run is phase WC below, and its check IDs keep the kit's `W2.` prefix.
 
 ## Run of 2026-11-19 (v1.10): Windows and Intune
 
@@ -42,6 +42,7 @@ All required checks pass on the final code of this change (base `main` at ed23e4
 | L2 | Root MDM: real `lockdown-linux.sh` | Linux runner (root) | **16/16 PASS** |
 | L3 | Full chaos harness, rounds 1 and 2 | Linux runner (root) | **2/2 PASS**: 0 BYPASSED, 0 sanity failures |
 | C1, C2, K1, K2 | CDK deployment, egress, Kiro CLI | — | **Not run** in this change. C1, C2, K1: no CDK or egress code changed; see the 2026-10-10 run. K2: its code changed (new `PermissionRequest` and `updatedInput` cases), but it needs a Kiro API key and has never been run; see [Not covered in this run](#not-covered-in-this-run) |
+| WC | Kiro installer mechanics and the W2 kit (added later the same day, on three further harnesses, 11 runs) | Windows runner (SYSTEM) | **24/24 PASS** in the final run (run 11), 1 skip (the standard-user context). Runs 2, 3 and 8 failed because Kiro was running (an installer finding), run 10 because of a suite defect that was then corrected; see [WC](#wc--kiro-installer-mechanics-windows-runner-system) |
 | T1 | Teardown and leftover scan | sandbox account | See [Teardown (2026-11-19)](#teardown-2026-11-19) |
 
 ### Method
@@ -54,15 +55,15 @@ All required checks pass on the final code of this change (base `main` at ed23e4
   - **W3:** `agent-hooks/tests/run-tests.ps1` under both PowerShell versions (each guard is started as its own process and fed a hook event on STDIN), and the latency of one call of each guard.
   - **W4:** the Intune flow on the real paths. The Win32 install command (`-StageSources -DeployHooks -InstallUser -DisableUpdates`) is started from 32-bit PowerShell, as Microsoft documents for `powershell.exe` in an install command. The two detection wrappers are then run from 64-bit and 32-bit PowerShell with STDOUT and STDERR captured separately, before and after an administrator-style tamper (the Users DENY ACE and the content of the policy file, the Default profile's hook file, `UpdateMode`). The remediation wrapper is run from 64-bit PowerShell on that tamper and from 32-bit PowerShell on a second tamper of the policy file only, followed by the uninstall command.
 - **Linux runner.** [`linux-suite.sh`](../security-tests/aws-integration/linux-suite.sh) runs L1 (what CI runs, plus all four synth variants), L2 (a real `lockdown-linux.sh` as root with a non-root test user) and L3 (the chaos harness, rounds 1 and 2).
-- **Pass criterion.** Every `CHECK` must be `PASS`, and every embedded suite must report `FAIL=0`. No `CHECK` was skipped (`skip=0` in every `PHASE` line). Inside the embedded suites one case was skipped: the macOS-only honesty check of `mdm/tests/test-lockdown-macos.sh`, which reports `PASS=30 FAIL=0 SKIP=1` when run on Linux (`L1.mdm-macos-dry-run`).
-- **State between runs.** The runners were not reset between the nine runs. In the final run `C:\ProgramData\Kiro` and the policy already existed from the previous run (the deployment logged the policy as unchanged; the write by this script version is shown by the restore after the tamper), and on Linux the test user and the hook scripts were reused. A first deployment of the final code on clean real paths was exercised only under the temporary prefix of the embedded suites.
+- **Pass criterion.** Every `CHECK` must be `PASS`, and every embedded suite must report `FAIL=0`. In W1, W3, W4 and L1 to L3 no `CHECK` was skipped (`skip=0` in those `PHASE` lines); phase WC, added later, has skips, which its section explains. Inside the embedded suites one case was skipped: the macOS-only honesty check of `mdm/tests/test-lockdown-macos.sh`, which reports `PASS=30 FAIL=0 SKIP=1` when run on Linux (`L1.mdm-macos-dry-run`).
+- **State between runs.** The runners were not reset between the nine runs. In the final run `C:\ProgramData\Kiro` and the policy already existed from the previous run (the deployment logged the policy as unchanged; the write by this script version is shown by the restore after the tamper), and on Linux the test user and the hook scripts were reused. A first deployment of the final code on clean real paths was exercised only under the temporary prefix of the embedded suites. That changed later the same day: the `windows` stage was repeated on the clean runner of the second harness and passed 49/49 (see [WC](#wc--kiro-installer-mechanics-windows-runner-system)).
 
 ### Environment
 
 | Item | Value |
 |------|-------|
 | Account | The same sandbox account as on 2026-10-10, `ap-southeast-1`. Only the harness stack was created; no CDK stack was deployed |
-| Windows runner | Windows Server 2022 (latest AWS-provided English Full Base image), t3.medium, Windows PowerShell 5.1 and PowerShell 7.6.10. **No Kiro IDE or Kiro CLI installed** |
+| Windows runner | Windows Server 2022 (latest AWS-provided English Full Base image), t3.medium, Windows PowerShell 5.1 and PowerShell 7.6.10. **No Kiro IDE or Kiro CLI installed** for W1, W3 and W4; on the later harnesses phase WC installed Kiro IDE 1.4.236, which nobody opened or signed in to |
 | Linux runner | Amazon Linux 2023 x86_64, t3.medium, Node.js v22.23.5 |
 | Identity | Commands ran as SYSTEM (Windows) and root (Linux) through SSM |
 
@@ -91,7 +92,7 @@ Nine runs were made on the same harness (start times in UTC; approximate for run
 | 5 | Second review, of the fixes: a folder re-created by a user in the instant after it was moved aside was adopted; deleting the old file before the rename could leave a device without the policy; escaped quotes desynchronised the guards' quote scanner; three guard regular expressions were quadratic, with no size or time bound | Review of the fixes | Folders are created under a random name, locked and renamed into place; files are prepared in an administrators-only work folder and the old file is put back if the rename fails; the guards evaluate the escaped-quote readings and stop themselves with exit 2 on oversized input or after 2.5 seconds |
 | 6 | The lockdown scripts treated `auth_portal_url` (Kiro CLI 3.5.0+) as an unknown settings key, so `--strict` / `-Strict` refused a valid policy | Check of the issue's follow-up items against Kiro's sign-in page | Known key, validated; tests on all three operating systems |
 
-**Changes after the final run.** Three edits were made after run 9 and were not re-run on the runners, which had been torn down: two rows of `agent-hooks/tests/fixtures/windows-cases.tsv` now use a placeholder user name in a `C:\Users\...` path (the name was replaced for publication; the rows still expect the same result), header comments in `mdm/lockdown-linux.sh` and `mdm/lockdown-macos.sh` were updated, and documentation was corrected. The local Linux and macOS dry-run tests were repeated afterwards; the changed fixture rows are run by the `validate-windows` CI job on the pull request.
+**Changes after the final run.** Three edits were made after run 9 and were not re-run on the runners, which had been torn down: two rows of `agent-hooks/tests/fixtures/windows-cases.tsv` now use a placeholder user name in a `C:\Users\...` path (the name was replaced for publication; the rows still expect the same result), header comments in `mdm/lockdown-linux.sh` and `mdm/lockdown-macos.sh` were updated, and documentation was corrected. The local Linux and macOS dry-run tests were repeated afterwards; the changed fixture rows are run by the `validate-windows` CI job on the pull request. Later the same day the `windows` stage was repeated three times with these edits in place, on new runners, and passed 49/49 each time (see [WC](#wc--kiro-installer-mechanics-windows-runner-system)).
 
 **Limits of this evidence.** Findings 4 and 5 were found by reading the code, not by an attack on a device: no test holds a handle on a pre-created file or races the folder creation. The tests added for them show the new behaviour (an untrusted folder is moved aside, a file with a foreign owner is replaced, no temporary folder is left behind), not the absence of every such path. The per-user hook files remain a documented residual risk (SYSTEM writes into user-controlled folders).
 
@@ -225,9 +226,247 @@ CHECK L3.run-chaos-hardened.sh PASS total=32 BLOCKED=27 DETECTED=1 GAP=4 BYPASSE
 PHASE L3 RESULT pass=2 fail=0 skip=0
 ```
 
+### WC — Kiro installer mechanics (Windows runner, SYSTEM)
+
+> **Windows Server 2022, outside Kiro's listed operating systems (Windows 10/11): installer mechanics only, no signed-in Kiro client.** These values answer how the installer behaves; they say nothing about Kiro's behaviour for a user.
+
+Runs 1 to 5 were made on a second harness (created 07:00 UTC, torn down after the runs), runs 6 to 11 on a third and a fourth one after a review of the code (see [Runs 6 to 11](#runs-6-to-11-the-corrected-code-on-two-further-harnesses)). All are for issue #43, with the opt-in stage `client` ([`windows-client-suite.ps1`](../security-tests/aws-integration/windows-client-suite.ps1)). The suite reads Kiro's update manifest, downloads the current system-wide installer from `prod.download.desktop.kiro.dev` only, and runs the automatable part of the W2 kit ([`Invoke-W2Checks.ps1`](../security-tests/windows-client/Invoke-W2Checks.ps1)) as SYSTEM: signature, silent install, inventory, the Intune wrappers from 64-bit and 32-bit PowerShell with a tamper test, and the inventory again under PowerShell 7. Before it, the `windows` stage (W1, W3, W4) was repeated on the new, clean runner and passed 49/49: this was a first deployment of the final issue #42 code on clean real paths, which the earlier run did not have.
+
+| Run | Start (UTC) | Setup | Result |
+|-----|-------------|-------|--------|
+| 1 | 07:23 | Clean runner; the kit's default switches at that time, `/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /LOG=...` | `PHASE WC` pass=21 fail=0 skip=2. Install exit 0 in 53 s. **The installer started Kiro:** the kit counted 1 `Kiro.exe` right after the install; a separate SSM command at 07:35 UTC listed 8 `Kiro.exe` processes, all owned by SYSTEM, in session 0, started between 07:24:55 and 07:25:12 |
+| 2 | 07:29 | Kiro still running; same switches; uninstall requested | pass=20 **fail=3**. Install exit 1 after 1 s; uninstall exit 1; nothing changed |
+| 3 | 07:32 | Kiro still running; `/MERGETASKS=!runcode` added | pass=20 **fail=3**: the same three failures |
+| 4 | 07:37 | The 8 Kiro processes stopped first; `/MERGETASKS=!runcode`; install over the existing install; uninstall | pass=23 fail=0 skip=1. Install exit 0 in 51 s, no Kiro process started; uninstall exit 0 in 2 s, folder and Uninstall entry gone |
+| 5 | 07:41 | No Kiro installed (uninstalled by run 4); fresh install with `/MERGETASKS=!runcode`; uninstall | pass=23 fail=0 skip=1. Install exit 0 in 48 s, no Kiro process started; uninstall clean |
+
+The kit and the suite changed between these runs (a new bundle before runs 2, 4 and 5): the wording of the lockdown ACTION line before run 2, the stop option before run 4, and the order in which the stop step reads the process owner before run 5. The run 1 lines below are the output of the first version. In run 4 the stop step printed an empty owner, because it read the owner after it had stopped the processes; the owner in the table comes from the separate SSM command.
+
+The failures of runs 2 and 3 are findings about the installer, not defects of the kit. The same separate SSM command (07:35 UTC, between runs 3 and 4) read the installer's own logs, `kiro-install.log` of run 2 and `kiro-install-norun.log` of run 3. Both end with these lines (timestamps removed):
+
+```
+Defaulting to Cancel for suppressed message box (OK/Cancel):
+Setup has detected that Kiro is currently running.
+
+Please close all instances of it now, then click OK to continue, or Cancel to exit.
+Got EAbort exception.
+Deinitializing Setup.
+Log closed.
+```
+
+The installer switches of runs 1 and 5 differ in `/MERGETASKS=!runcode` and in the `/LOG` argument, and both install into an empty folder; run 4 shows the same on an existing install. So the switch is what stops the installer from starting Kiro. Run 5 was not a fresh machine: the policy, the hooks and `UpdateMode` from the earlier runs were in place. After run 5 the kit's default switches were changed to include `/MERGETASKS=!runcode`; runs 6 and later use that default, except run 7, which left the switch out on purpose (through `IT_WC_INSTALLER_ARGS`). The skip common to all runs is `W2.10.user.detect` (no logged-on standard user on the runner); run 1 has a second one, `WC.uninstall`, because the uninstall was not requested.
+
+**Run 1, all lines** (the PowerShell 7 repeat is left out: 16 lines, 14 of them CHECK lines with the same results):
+
+```
+NOTE WC runs on Windows Server 2022, outside Kiro's listed operating systems (Windows 10/11): installer mechanics only, no signed-in Kiro client
+CHECK WC.manifest PASS currentRelease=1.4.236 url=https://prod.download.desktop.kiro.dev/releases/stable/win32-x64/signed/1.4.236/kiro-ide-1.4.236-stable-win32-x64-system.exe
+CHECK WC.download PASS version=1.4.236 bytes=236855936 sha256=7852935db5229218796dfdf63659c2b8345dde14d604a0b0882a79516cc1f6db seconds=12 file=C:\kiro-test\installer\kiro-ide-1.4.236-stable-win32-x64-system.exe
+CHECK WC.signature-gate PASS Authenticode status Valid; the kit runs the installer
+NOTE W2 run 2026-11-19T07:23:54Z; switches: -Install -InstallPolicy -Wrappers -TamperTest -InstallerPath; output folder: C:\kiro-test\w2; sanitized=True
+CHECK W2.0.os INFO caption=Microsoft Windows Server 2022 Datacenter; version=10.0.20348; build=20348.5870; display version=21H2; edition id=ServerDatacenter; edition=server (ProductType 3); architecture=64-bit; outside Kiro's listed operating systems (Windows 10/11)
+CHECK W2.0.powershell INFO edition=Desktop; version=5.1.20348.5773; process=64-bit; operating system=64-bit; host=ConsoleHost
+CHECK W2.0.context INFO SYSTEM; session=0; interactive=False
+CHECK W2.2.signature PASS status=Valid (Valid alone is not a publisher check: compare the signer in W2.2.signer)
+CHECK W2.2.signer INFO subject=[CN="Amazon.com, Inc.", OU=AWS Kiro, O="Amazon.com, Inc.", L=Seattle, S=Washington, C=US, SERIALNUMBER=2620453, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.2=Delaware, OID.1.3.6.1.4.1.311.60.2.1.3=US]; issuer=[CN=DigiCert Trusted G4 Code Signing RSA4096 SHA384 2021 CA1, O="DigiCert, Inc.", C=US]; thumbprint=936E025D82E8C1A04C1AFF51FBA6D5F72455C512; valid until=2027-03-26; timestamp signer=[CN=DigiCert SHA256 RSA4096 Timestamp Responder 2026 1, O="DigiCert, Inc.", C=US]; Kiro publishes no signer name (verify): record this subject as your baseline
+CHECK W2.2.sha256 INFO sha256=7852935db5229218796dfdf63659c2b8345dde14d604a0b0882a79516cc1f6db; size=236855936; file=kiro-ide-1.4.236-stable-win32-x64-system.exe; file version=1.4.236             ; product version=1.4.236                                           ; product name=Kiro
+ACTION about to run the installer silently, which installs Kiro on this device: C:\kiro-test\installer\kiro-ide-1.4.236-stable-win32-x64-system.exe /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /LOG="C:\kiro-test\w2\kiro-install.log" (time limit 15 min)
+NOTE the installer left Kiro processes running in this session (Kiro.exe x1). Stop them or restart the device before the manual checks; under SYSTEM they run in session 0
+CHECK W2.1.install PASS exit=0; duration=53 s; arguments=[/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /LOG="C:\kiro-test\w2\kiro-install.log"] (Inno Setup switches; not documented by Kiro (verify)); Kiro processes started during the install and still running: Kiro.exe x1
+ACTION about to run C:\kiro-test\repo\mdm\lockdown-windows.ps1 -StageSources -DeployHooks -InstallUser -DisableUpdates: writes the policy, the hook guards and the staged sources under C:\ProgramData\Kiro, a hook file in every user profile, and UpdateMode under HKLM\SOFTWARE\Policies\Kiro
+CHECK W2.5.policy-file:install PASS lockdown-windows.ps1 exit=0; duration=11 s; last line: [lockdown-windows] done (2 warning(s)). Managed settings: C:\ProgramData\Kiro\managed-settings.json
+CHECK W2.1.uninstall-entry:hklm64 INFO view=HKLM 64-bit view (native); key={ECDD7648-5B69-4BDC-9D21-C3452CE76CD2}_is1; DisplayName=Kiro; DisplayVersion=1.4.236; InstallLocation=C:\Program Files\Kiro\; UninstallString="C:\Program Files\Kiro\unins000.exe"; QuietUninstallString="C:\Program Files\Kiro\unins000.exe" /SILENT
+CHECK W2.1.install-folder INFO folder=C:\Program Files\Kiro; exists=True; expected=C:\Program Files\Kiro; matches the expected folder=True; source: InstallLocation of the Uninstall entry in the HKLM 64-bit view (native)
+CHECK W2.1.exe INFO path=C:\Program Files\Kiro\Kiro.exe; file version=1.4.236; product version=1.4.236; product name=Kiro; signature=Valid, signer [CN="Amazon.com, Inc.", OU=AWS Kiro, O="Amazon.com, Inc.", L=Seattle, S=Washington, C=US, SERIALNUMBER=2620453, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.2=Delaware, OID.1.3.6.1.4.1.311.60.2.1.3=US]; readable by this account=True
+CHECK W2.1.path INFO machine PATH: C:\Program Files\Kiro\bin; user PATH of this account: none; commands found on the PATH of this process: none (kiro, kiro-cli)
+CHECK W2.1.start-menu INFO all users: C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Kiro\Kiro.lnk -> C:\Program Files\Kiro\Kiro.exe; per user: none (2 profile(s) searched)
+CHECK W2.3.per-user-build INFO none: no per-user install found (HKCU Uninstall entries, AppData\Local\Programs\Kiro* in 2 profile(s)); system-wide install: C:\Program Files\Kiro
+CHECK W2.4.updatemode INFO HKLM\SOFTWARE\Policies\Kiro, 64-bit view: UpdateMode=none (String); 32-bit view: UpdateMode=none (String); what Kiro shows in Help > About is manual (W2.4)
+CHECK W2.5.policy-file PASS size=30375; no BOM; parses as JSON; rules=34 (deny=20, ask=14); Users DENY ACE present; sha256=f930b7c2e9d191f9475cb8f1fe5edf967ab14be1b5e6dbd1565d149d2300b03d; whether Kiro enforces it is manual (W2.5, W2.6)
+CHECK W2.10.system64.detect-compliant PASS exit=0; COMPLIANT: the deployed Kiro controls match the staged sources
+CHECK W2.10.system64.win32-detected PASS exit=0; stdout=[Kiro policy compliant]; stderr is empty
+ACTION about to tamper with C:\ProgramData\Kiro\managed-settings.json for context system64: remove the Users DENY entry and append one space; the remediation wrapper then restores the file
+CHECK W2.10.system64.detect-drift PASS exit=1; NON-COMPLIANT: drift in 2 item(s); first: C:\ProgramData\Kiro\managed-settings.json content differs (sha256 a0276cf3d0647095eb615f3443f15d300c70987897608c6ff714e418b01f0c60, expected f930b7c2e9d191f9475cb8f1fe5edf967ab14be1b5e6dbd1565d149d2300b03d)
+CHECK W2.10.system64.win32-not-detected PASS exit=1; nothing on STDOUT or STDERR
+CHECK W2.10.system64.remediate PASS exit=0; REMEDIATED: lockdown-windows.ps1 restored the Kiro controls (1 change(s))
+CHECK W2.10.system64.detect-after-remediate PASS exit=0; COMPLIANT: the deployed Kiro controls match the staged sources; the policy file has the hash it had before the tamper
+CHECK W2.10.system32.detect-compliant PASS exit=0; COMPLIANT: the deployed Kiro controls match the staged sources
+CHECK W2.10.system32.win32-detected PASS exit=0; stdout=[Kiro policy compliant]; stderr is empty
+ACTION about to tamper with C:\ProgramData\Kiro\managed-settings.json for context system32: remove the Users DENY entry and append one space; the remediation wrapper then restores the file
+CHECK W2.10.system32.detect-drift PASS exit=1; NON-COMPLIANT: drift in 2 item(s); first: C:\ProgramData\Kiro\managed-settings.json content differs (sha256 a0276cf3d0647095eb615f3443f15d300c70987897608c6ff714e418b01f0c60, expected f930b7c2e9d191f9475cb8f1fe5edf967ab14be1b5e6dbd1565d149d2300b03d)
+CHECK W2.10.system32.win32-not-detected PASS exit=1; nothing on STDOUT or STDERR
+CHECK W2.10.system32.remediate PASS exit=0; REMEDIATED: lockdown-windows.ps1 restored the Kiro controls (1 change(s))
+CHECK W2.10.system32.detect-after-remediate PASS exit=0; COMPLIANT: the deployed Kiro controls match the staged sources; the policy file has the hash it had before the tamper
+CHECK W2.10.user.detect SKIP context user: run this script with -UserContext -Wrappers as the logged-on standard user
+PHASE W2 RESULT pass=16 fail=0 skip=1 info=12
+CHECK WC.kit PASS exit=0; PHASE W2 RESULT pass=16 fail=0 skip=1 info=12
+CHECK WC.kit-pwsh7 PASS PowerShell 7.6.10; same results as Windows PowerShell 5.1 for the checks run in both; exit=0; PHASE W2 RESULT pass=2 fail=0 skip=0 info=12
+CHECK WC.install-folder-entries INFO C:\Program Files\Kiro: 22 top-level entries: bin\, chrome_100_percent.pak, chrome_200_percent.pak, d3dcompiler_47.dll, dxcompiler.dll, dxil.dll, ffmpeg.dll, icudtl.dat, Kiro.exe, Kiro.VisualElementsManifest.xml, LICENSES.chromium.html, locales\, resources\, resources.pak, snapshot_blob.bin, tools\, unins000.dat, unins000.exe, v8_context_snapshot.bin, vk_swiftshader.dll, vk_swiftshader_icd.json, vulkan-1.dll
+CHECK WC.uninstall-command:hklm64 INFO "C:\Program Files\Kiro\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART - UninstallString from the 64-bit registry view plus Inno Setup switches that Kiro does not document (verify)
+CHECK WC.uninstall:hklm64 SKIP recorded only, not run: KIRO_WC_UNINSTALL is not 1 (operator machine: IT_WC_UNINSTALL=1)
+PHASE WC RESULT pass=21 fail=0 skip=2 info=14
+```
+
+**Run 2** (Kiro running):
+
+```
+CHECK W2.1.install FAIL exit=1; duration=1 s; arguments=[/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /LOG="C:\kiro-test\w2\kiro-install.log"] (Inno Setup switches; not documented by Kiro (verify)); Kiro processes started during the install and still running: none; see the installer log named in the arguments
+CHECK WC.uninstall-command:hklm64 INFO "C:\Program Files\Kiro\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART - UninstallString from the 64-bit registry view plus Inno Setup switches that Kiro does not document (verify)
+CHECK WC.uninstall:hklm64 FAIL exit=1: C:\Program Files\Kiro\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+CHECK WC.uninstall-leftovers:hklm64 FAIL Uninstall entry gone=False; install folder C:\Program Files\Kiro gone=False; left in the folder: bin, locales, resources, tools, chrome_100_percent.pak, chrome_200_percent.pak, d3dcompiler_47.dll, dxcompiler.dll, dxil.dll, ffmpeg.dll
+PHASE WC RESULT pass=20 fail=3 skip=1 info=14
+```
+
+**Run 4** (Kiro stopped first, `/MERGETASKS=!runcode`, install over the existing install):
+
+```
+CHECK WC.stop-kiro:before-install INFO Kiro.exe processes found running from C:\Program Files\Kiro\: 8 (owner: ; session: 0); still running after the stop: 0
+NOTE WC installer switches from KIRO_WC_INSTALLER_ARGS: /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /MERGETASKS=!runcode /LOG=C:\kiro-test\w2\kiro-install-norun.log
+CHECK W2.1.install PASS exit=0; duration=51 s; arguments=[/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /MERGETASKS=!runcode /LOG=C:\kiro-test\w2\kiro-install-norun.log] (Inno Setup switches; not documented by Kiro (verify)); Kiro processes started during the install and still running: none
+CHECK WC.uninstall-command:hklm64 INFO "C:\Program Files\Kiro\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART - UninstallString from the 64-bit registry view plus Inno Setup switches that Kiro does not document (verify)
+CHECK WC.stop-kiro:before-uninstall-hklm64 INFO Kiro.exe processes found running from C:\Program Files\Kiro\: 0 (owner: ; session: ); still running after the stop: 0
+CHECK WC.uninstall:hklm64 PASS exit=0 after 2 s: C:\Program Files\Kiro\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+CHECK WC.uninstall-leftovers:hklm64 PASS Uninstall entry gone=True; install folder C:\Program Files\Kiro gone=True
+PHASE WC RESULT pass=23 fail=0 skip=1 info=16
+```
+
+**Run 5** (no Kiro installed, fresh install with `/MERGETASKS=!runcode`):
+
+```
+CHECK WC.stop-kiro:before-install INFO Kiro.exe processes found running from C:\Program Files\Kiro\: 0 (owner: ; session: ); still running after the stop: 0
+NOTE WC installer switches from KIRO_WC_INSTALLER_ARGS: /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /MERGETASKS=!runcode /LOG=C:\kiro-test\w2\kiro-install-fresh-norun.log
+CHECK W2.1.install PASS exit=0; duration=48 s; arguments=[/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /MERGETASKS=!runcode /LOG=C:\kiro-test\w2\kiro-install-fresh-norun.log] (Inno Setup switches; not documented by Kiro (verify)); Kiro processes started during the install and still running: none
+CHECK WC.uninstall-command:hklm64 INFO "C:\Program Files\Kiro\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART - UninstallString from the 64-bit registry view plus Inno Setup switches that Kiro does not document (verify)
+CHECK WC.stop-kiro:before-uninstall-hklm64 INFO Kiro.exe processes found running from C:\Program Files\Kiro\: 0 (owner: ; session: ); still running after the stop: 0
+CHECK WC.uninstall:hklm64 PASS exit=0 after 2 s: C:\Program Files\Kiro\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+CHECK WC.uninstall-leftovers:hklm64 PASS Uninstall entry gone=True; install folder C:\Program Files\Kiro gone=True
+PHASE WC RESULT pass=23 fail=0 skip=1 info=16
+```
+
+#### Runs 6 to 11: the corrected code, on two further harnesses
+
+A review of this change before publication found defects in the kit and in the suite. There is no PowerShell on the developer machine, so the corrected code was run again on new harnesses: runs 6 to 10 on a third harness (created 08:15 to 08:19 UTC), run 11 on a fourth (created 08:59 to 09:03 UTC).
+
+Corrected before run 6:
+
+- **Kit.** The default installer switches include `/MERGETASKS=!runcode`. Output is sanitized before it is cut to length, and the early "output folder" errors are sanitized as well. A `-NoSanitize` run writes to its own file. The restore after the tamper test also covers a tamper step that fails half-way. `-ExpectedSignerSubject` ignores double quotes, because the subject of the Kiro installer contains them and they do not survive every command line. The Start Menu search does not enter junctions and stops four levels down.
+- **Suite.** The installer is run only when its signer subject starts with the CN, OU and O of the subject measured in runs 1 to 5, and the subject read from the installer is passed to the kit as `-ExpectedSignerSubject`. The stop step reads the process owner before the stop and catches errors. A failed uninstall reports its duration.
+
+| Run | Start (UTC) | Setup | Result |
+|-----|-------------|-------|--------|
+| 6 | 08:23 | New, clean runner; the kit's default switches (with `/MERGETASKS=!runcode`); uninstall | `PHASE WC` pass=23 fail=0 skip=2. Install exit 0 in 91 s, no Kiro process started; `W2.2.signer` PASS through `-ExpectedSignerSubject`; uninstall exit 0 in 3 s, folder and Uninstall entry gone. The second skip is `WC.kit-pwsh7`: PowerShell 7 was not installed yet |
+| 7 | 08:27 | Switches without `/MERGETASKS=!runcode` (through `IT_WC_INSTALLER_ARGS`); no uninstall | pass=21 fail=0 skip=3. Install exit 0 in 48 s. **The installer started Kiro again** (1 `Kiro.exe` counted right after the install) |
+| 8 | 08:30 | Kiro still running; default switches; uninstall requested | pass=20 **fail=3**: install exit 1 after 2 s, uninstall exit 1 after 0 s, nothing changed. The same three checks as in runs 2 and 3 |
+| 9 | 08:33 | Stop option; default switches; uninstall | pass=23 fail=0 skip=2. The stop step found **8 `Kiro.exe` processes, owner SYSTEM, session 0**, and stopped them; install exit 0 in 52 s, no Kiro process started; uninstall exit 0 in 3 s |
+| `windows` stage | 08:36 to 08:51 | W1, W3 and W4 again on this runner (the stage installs PowerShell 7) | `PHASE W1,W3,W4` pass=49 fail=0 skip=0 |
+| 10 | 08:52 | Default switches; uninstall; PowerShell 7 present | pass=23 **fail=1**: `WC.kit-pwsh7`. A defect of the suite, introduced by the signer correction: the PowerShell 7 repeat was not given `-ExpectedSignerSubject`, so `W2.2.signer` ended INFO there and PASS under 5.1. The kit itself passed (17/17) and the uninstall was clean. Corrected before run 11 |
+| `windows` stage | 09:03 to 09:22 | Fourth harness, new clean runner: W1, W3 and W4 | `PHASE W1,W3,W4` pass=49 fail=0 skip=0 |
+| 11 | 09:23 | Same runner; default switches; uninstall; PowerShell 7 present | **pass=24 fail=0 skip=1.** Install exit 0 in 51 s, no Kiro process started; `WC.kit-pwsh7` PASS: the same results under PowerShell 7.6.10, including the signer check; uninstall exit 0 in 3 s, folder and Uninstall entry gone |
+
+Runs 7 to 9 repeat the two installer findings with the corrected code (the bundle uploaded before run 6, which run 10 also used; the suite was corrected once more before run 11, in the PowerShell 7 repeat, which runs 7 to 9 skipped) and add what runs 1 to 5 had not recorded by themselves: the owner of the Kiro processes (SYSTEM, read by the suite) and the duration of the failed uninstall.
+
+Which corrections these runs exercised: the default switches, the signer pin and `-ExpectedSignerSubject` under both PowerShell versions, the Start Menu search, the tamper test and its restore on the normal path, the owner read, and the duration of a failed uninstall. **Not exercised:** the sanitizer's replacements and the cut after them (the sanitizer ran on every line, but in no run did it replace anything, and no line reached the 1800-character limit; the longest has about 600 characters), the early "output folder" errors, the `-NoSanitize` file, a tamper step that fails half-way, a junction inside a Start Menu folder, the error handling of the owner read, and the refusal of an installer whose signer differs.
+
+Two limits of the signer check in WC. The pin covers the first three components of the subject (CN, OU, O). The suite then passes the subject it has just read from the installer to the kit as `-ExpectedSignerSubject`: that exercises the parameter and the command line, but it compares the certificate with itself, so `W2.2.signer` PASS in WC is not an independent check; the pin is.
+
+**Run 7** (switches without `/MERGETASKS=!runcode`):
+
+```
+NOTE WC installer switches from KIRO_WC_INSTALLER_ARGS: /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /LOG=C:\kiro-test\w2\kiro-install-runcode.log
+NOTE the installer left Kiro processes running in this session (Kiro.exe x1). Stop them or restart the device before the manual checks; under SYSTEM they run in session 0
+CHECK W2.1.install PASS exit=0; duration=48 s; arguments=[/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /LOG=C:\kiro-test\w2\kiro-install-runcode.log] (Inno Setup switches; not documented by Kiro (verify)); Kiro processes started during the install and still running: Kiro.exe x1
+PHASE WC RESULT pass=21 fail=0 skip=3 info=13
+```
+
+**Run 8** (Kiro running):
+
+```
+CHECK W2.1.install FAIL exit=1; duration=2 s; arguments=[/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /MERGETASKS=!runcode /LOG="C:\kiro-test\w2\kiro-install.log"] (Inno Setup switches; not documented by Kiro (verify)); Kiro processes started during the install and still running: none; see the installer log named in the arguments
+CHECK WC.uninstall-command:hklm64 INFO "C:\Program Files\Kiro\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART - UninstallString from the 64-bit registry view plus Inno Setup switches that Kiro does not document (verify)
+CHECK WC.uninstall:hklm64 FAIL exit=1 after 0 s: C:\Program Files\Kiro\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+CHECK WC.uninstall-leftovers:hklm64 FAIL Uninstall entry gone=False; install folder C:\Program Files\Kiro gone=False; left in the folder: bin, locales, resources, tools, chrome_100_percent.pak, chrome_200_percent.pak, d3dcompiler_47.dll, dxcompiler.dll, dxil.dll, ffmpeg.dll
+PHASE WC RESULT pass=20 fail=3 skip=2 info=13
+```
+
+**Run 9** (stop option):
+
+```
+CHECK WC.stop-kiro:before-install INFO Kiro.exe processes found running from C:\Program Files\Kiro\: 8 (owner: SYSTEM; session: 0); still running after the stop: 0
+CHECK W2.1.install PASS exit=0; duration=52 s; arguments=[/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /MERGETASKS=!runcode /LOG="C:\kiro-test\w2\kiro-install.log"] (Inno Setup switches; not documented by Kiro (verify)); Kiro processes started during the install and still running: none
+CHECK WC.stop-kiro:before-uninstall-hklm64 INFO Kiro.exe processes found running from C:\Program Files\Kiro\: 0 (owner: none; session: ); still running after the stop: 0
+CHECK WC.uninstall:hklm64 PASS exit=0 after 3 s: C:\Program Files\Kiro\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+CHECK WC.uninstall-leftovers:hklm64 PASS Uninstall entry gone=True; install folder C:\Program Files\Kiro gone=True
+PHASE WC RESULT pass=23 fail=0 skip=2 info=15
+```
+
+**Run 10** (the suite defect):
+
+```
+CHECK W2.2.signer PASS the signer subject equals -ExpectedSignerSubject (double quotes ignored); subject=[CN="Amazon.com, Inc.", OU=AWS Kiro, O="Amazon.com, Inc.", L=Seattle, S=Washington, C=US, SERIALNUMBER=2620453, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.2=Delaware, OID.1.3.6.1.4.1.311.60.2.1.3=US]; issuer=[CN=DigiCert Trusted G4 Code Signing RSA4096 SHA384 2021 CA1, O="DigiCert, Inc.", C=US]; thumbprint=936E025D82E8C1A04C1AFF51FBA6D5F72455C512; valid until=2027-03-26; timestamp signer=[CN=DigiCert SHA256 RSA4096 Timestamp Responder 2026 1, O="DigiCert, Inc.", C=US]
+CHECK WC.kit PASS exit=0; PHASE W2 RESULT pass=17 fail=0 skip=1 info=11
+PWSH7 CHECK W2.2.signer INFO subject=[CN="Amazon.com, Inc.", OU=AWS Kiro, O="Amazon.com, Inc.", L=Seattle, S=Washington, C=US, SERIALNUMBER=2620453, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.2=Delaware, OID.1.3.6.1.4.1.311.60.2.1.3=US]; issuer=[CN=DigiCert Trusted G4 Code Signing RSA4096 SHA384 2021 CA1, O="DigiCert, Inc.", C=US]; thumbprint=936E025D82E8C1A04C1AFF51FBA6D5F72455C512; valid until=2027-03-26; timestamp signer=[CN=DigiCert SHA256 RSA4096 Timestamp Responder 2026 1, O="DigiCert, Inc.", C=US]; Kiro publishes no signer name (verify): record this subject as your baseline
+CHECK WC.kit-pwsh7 FAIL PowerShell 7.6.10; results differ from Windows PowerShell 5.1: W2.2.signer: PASS under 5.1, INFO under 7
+PHASE WC RESULT pass=23 fail=1 skip=1 info=13
+```
+
+**Run 11, all lines** (the final code on a new, clean runner; of the 16 lines of the PowerShell 7 repeat only the signer check and the PHASE line are shown):
+
+```
+NOTE WC runs on Windows Server 2022, outside Kiro's listed operating systems (Windows 10/11): installer mechanics only, no signed-in Kiro client
+CHECK WC.manifest PASS currentRelease=1.4.236 url=https://prod.download.desktop.kiro.dev/releases/stable/win32-x64/signed/1.4.236/kiro-ide-1.4.236-stable-win32-x64-system.exe
+CHECK WC.download PASS version=1.4.236 bytes=236855936 sha256=7852935db5229218796dfdf63659c2b8345dde14d604a0b0882a79516cc1f6db seconds=2 file=C:\kiro-test\installer\kiro-ide-1.4.236-stable-win32-x64-system.exe
+CHECK WC.signature-gate PASS Authenticode status Valid and the signer subject starts with [CN="Amazon.com, Inc.", OU=AWS Kiro, O="Amazon.com, Inc.",]; the kit runs the installer
+NOTE W2 run 2026-11-19T09:23:20Z; switches: -Install -InstallPolicy -Wrappers -TamperTest -InstallerPath; output folder: C:\kiro-test\w2; sanitized=True
+CHECK W2.0.os INFO caption=Microsoft Windows Server 2022 Datacenter; version=10.0.20348; build=20348.5870; display version=21H2; edition id=ServerDatacenter; edition=server (ProductType 3); architecture=64-bit; outside Kiro's listed operating systems (Windows 10/11)
+CHECK W2.0.powershell INFO edition=Desktop; version=5.1.20348.5773; process=64-bit; operating system=64-bit; host=ConsoleHost
+CHECK W2.0.context INFO SYSTEM; session=0; interactive=False
+CHECK W2.2.signature PASS status=Valid (Valid alone is not a publisher check: compare the signer in W2.2.signer)
+CHECK W2.2.signer PASS the signer subject equals -ExpectedSignerSubject (double quotes ignored); subject=[CN="Amazon.com, Inc.", OU=AWS Kiro, O="Amazon.com, Inc.", L=Seattle, S=Washington, C=US, SERIALNUMBER=2620453, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.2=Delaware, OID.1.3.6.1.4.1.311.60.2.1.3=US]; issuer=[CN=DigiCert Trusted G4 Code Signing RSA4096 SHA384 2021 CA1, O="DigiCert, Inc.", C=US]; thumbprint=936E025D82E8C1A04C1AFF51FBA6D5F72455C512; valid until=2027-03-26; timestamp signer=[CN=DigiCert SHA256 RSA4096 Timestamp Responder 2026 1, O="DigiCert, Inc.", C=US]
+CHECK W2.2.sha256 INFO sha256=7852935db5229218796dfdf63659c2b8345dde14d604a0b0882a79516cc1f6db; size=236855936; file=kiro-ide-1.4.236-stable-win32-x64-system.exe; file version=1.4.236             ; product version=1.4.236                                           ; product name=Kiro
+ACTION about to run the installer silently, which installs Kiro on this device: C:\kiro-test\installer\kiro-ide-1.4.236-stable-win32-x64-system.exe /VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /MERGETASKS=!runcode /LOG="C:\kiro-test\w2\kiro-install.log" (time limit 15 min)
+CHECK W2.1.install PASS exit=0; duration=51 s; arguments=[/VERYSILENT /SP- /SUPPRESSMSGBOXES /NORESTART /MERGETASKS=!runcode /LOG="C:\kiro-test\w2\kiro-install.log"] (Inno Setup switches; not documented by Kiro (verify)); Kiro processes started during the install and still running: none
+ACTION about to run C:\kiro-test\repo\mdm\lockdown-windows.ps1 -StageSources -DeployHooks -InstallUser -DisableUpdates: writes the policy, the hook guards and the staged sources under C:\ProgramData\Kiro, a hook file in every user profile, and UpdateMode under HKLM\SOFTWARE\Policies\Kiro. A policy, hook files or staged sources that are already there are REPLACED (test devices only)
+CHECK W2.5.policy-file:install PASS lockdown-windows.ps1 exit=0; duration=4 s; last line: [lockdown-windows] done (2 warning(s)). Managed settings: C:\ProgramData\Kiro\managed-settings.json
+CHECK W2.1.uninstall-entry:hklm64 INFO view=HKLM 64-bit view (native); key={ECDD7648-5B69-4BDC-9D21-C3452CE76CD2}_is1; DisplayName=Kiro; DisplayVersion=1.4.236; InstallLocation=C:\Program Files\Kiro\; UninstallString="C:\Program Files\Kiro\unins000.exe"; QuietUninstallString="C:\Program Files\Kiro\unins000.exe" /SILENT
+CHECK W2.1.install-folder INFO folder=C:\Program Files\Kiro; exists=True; expected=C:\Program Files\Kiro; matches the expected folder=True; source: InstallLocation of the Uninstall entry in the HKLM 64-bit view (native)
+CHECK W2.1.exe INFO path=C:\Program Files\Kiro\Kiro.exe; file version=1.4.236; product version=1.4.236; product name=Kiro; signature=Valid, signer [CN="Amazon.com, Inc.", OU=AWS Kiro, O="Amazon.com, Inc.", L=Seattle, S=Washington, C=US, SERIALNUMBER=2620453, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.2=Delaware, OID.1.3.6.1.4.1.311.60.2.1.3=US]; readable by this account=True
+CHECK W2.1.path INFO machine PATH: C:\Program Files\Kiro\bin; user PATH of this account: none; commands found on the PATH of this process: none (kiro, kiro-cli)
+CHECK W2.1.start-menu INFO all users: C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Kiro\Kiro.lnk -> C:\Program Files\Kiro\Kiro.exe; per user: none (2 profile(s) searched)
+CHECK W2.3.per-user-build INFO none: no per-user install found (HKCU Uninstall entries, AppData\Local\Programs\Kiro* in 2 profile(s)); system-wide install: C:\Program Files\Kiro
+CHECK W2.4.updatemode INFO HKLM\SOFTWARE\Policies\Kiro, 64-bit view: UpdateMode=none (String); 32-bit view: UpdateMode=none (String); what Kiro shows in Help > About is manual (W2.4)
+CHECK W2.5.policy-file PASS size=30375; no BOM; parses as JSON; rules=34 (deny=20, ask=14); Users DENY ACE present; sha256=f930b7c2e9d191f9475cb8f1fe5edf967ab14be1b5e6dbd1565d149d2300b03d; whether Kiro enforces it is manual (W2.5, W2.6)
+CHECK W2.10.system64.detect-compliant PASS exit=0; COMPLIANT: the deployed Kiro controls match the staged sources
+CHECK W2.10.system64.win32-detected PASS exit=0; stdout=[Kiro policy compliant]; stderr is empty
+ACTION about to tamper with C:\ProgramData\Kiro\managed-settings.json for context system64: remove the Users DENY entry and append one space; the remediation wrapper then restores the file
+CHECK W2.10.system64.detect-drift PASS exit=1; NON-COMPLIANT: drift in 2 item(s); first: C:\ProgramData\Kiro\managed-settings.json content differs (sha256 a0276cf3d0647095eb615f3443f15d300c70987897608c6ff714e418b01f0c60, expected f930b7c2e9d191f9475cb8f1fe5edf967ab14be1b5e6dbd1565d149d2300b03d)
+CHECK W2.10.system64.win32-not-detected PASS exit=1; nothing on STDOUT or STDERR
+CHECK W2.10.system64.remediate PASS exit=0; REMEDIATED: lockdown-windows.ps1 restored the Kiro controls (1 change(s))
+CHECK W2.10.system64.detect-after-remediate PASS exit=0; COMPLIANT: the deployed Kiro controls match the staged sources; the policy file has the hash it had before the tamper
+CHECK W2.10.system32.detect-compliant PASS exit=0; COMPLIANT: the deployed Kiro controls match the staged sources
+CHECK W2.10.system32.win32-detected PASS exit=0; stdout=[Kiro policy compliant]; stderr is empty
+ACTION about to tamper with C:\ProgramData\Kiro\managed-settings.json for context system32: remove the Users DENY entry and append one space; the remediation wrapper then restores the file
+CHECK W2.10.system32.detect-drift PASS exit=1; NON-COMPLIANT: drift in 2 item(s); first: C:\ProgramData\Kiro\managed-settings.json content differs (sha256 a0276cf3d0647095eb615f3443f15d300c70987897608c6ff714e418b01f0c60, expected f930b7c2e9d191f9475cb8f1fe5edf967ab14be1b5e6dbd1565d149d2300b03d)
+CHECK W2.10.system32.win32-not-detected PASS exit=1; nothing on STDOUT or STDERR
+CHECK W2.10.system32.remediate PASS exit=0; REMEDIATED: lockdown-windows.ps1 restored the Kiro controls (1 change(s))
+CHECK W2.10.system32.detect-after-remediate PASS exit=0; COMPLIANT: the deployed Kiro controls match the staged sources; the policy file has the hash it had before the tamper
+CHECK W2.10.user.detect SKIP context user: run this script with -UserContext -Wrappers as the logged-on standard user
+PHASE W2 RESULT pass=17 fail=0 skip=1 info=11
+CHECK WC.kit PASS exit=0; PHASE W2 RESULT pass=17 fail=0 skip=1 info=11
+PWSH7 CHECK W2.2.signer PASS the signer subject equals -ExpectedSignerSubject (double quotes ignored); subject=[CN="Amazon.com, Inc.", OU=AWS Kiro, O="Amazon.com, Inc.", L=Seattle, S=Washington, C=US, SERIALNUMBER=2620453, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.2=Delaware, OID.1.3.6.1.4.1.311.60.2.1.3=US]; issuer=[CN=DigiCert Trusted G4 Code Signing RSA4096 SHA384 2021 CA1, O="DigiCert, Inc.", C=US]; thumbprint=936E025D82E8C1A04C1AFF51FBA6D5F72455C512; valid until=2027-03-26; timestamp signer=[CN=DigiCert SHA256 RSA4096 Timestamp Responder 2026 1, O="DigiCert, Inc.", C=US]
+PWSH7 PHASE W2 RESULT pass=3 fail=0 skip=0 info=11
+CHECK WC.kit-pwsh7 PASS PowerShell 7.6.10; same results as Windows PowerShell 5.1 for the checks run in both; exit=0; PHASE W2 RESULT pass=3 fail=0 skip=0 info=11
+CHECK WC.install-folder-entries INFO C:\Program Files\Kiro: 22 top-level entries: bin\, chrome_100_percent.pak, chrome_200_percent.pak, d3dcompiler_47.dll, dxcompiler.dll, dxil.dll, ffmpeg.dll, icudtl.dat, Kiro.exe, Kiro.VisualElementsManifest.xml, LICENSES.chromium.html, locales\, resources\, resources.pak, snapshot_blob.bin, tools\, unins000.dat, unins000.exe, v8_context_snapshot.bin, vk_swiftshader.dll, vk_swiftshader_icd.json, vulkan-1.dll
+CHECK WC.uninstall-command:hklm64 INFO "C:\Program Files\Kiro\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART - UninstallString from the 64-bit registry view plus Inno Setup switches that Kiro does not document (verify)
+CHECK WC.uninstall:hklm64 PASS exit=0 after 3 s: C:\Program Files\Kiro\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+CHECK WC.uninstall-leftovers:hklm64 PASS Uninstall entry gone=True; install folder C:\Program Files\Kiro gone=True
+PHASE WC RESULT pass=24 fail=0 skip=1 info=13
+```
+
+What these runs settle, for release 1.4.236 x64 on Windows Server 2022: the signer, the silent switches (install exit 0 after 48 to 91 seconds), the install folder, the Uninstall entry and its registry view, the PATH entry, that a silent install starts Kiro as SYSTEM unless `/MERGETASKS=!runcode` is given, and that install and uninstall end with exit code 1 within seconds while that Kiro runs. They are recorded in [`intune-deployment.md`](intune-deployment.md#1-kiro-ide-per-user-vs-system-wide-installer). Not settled: the same on Windows 10/11 and on ARM64, the per-user build, and everything that needs a user and a Kiro window.
+
 ### Not covered in this run
 
-- **Kiro itself on Windows.** No Kiro IDE or CLI was installed on the Windows runner. Not exercised: Kiro reading `C:\ProgramData\Kiro\managed-settings.json`, the new Windows rules as matched by a Kiro client (case handling, aliases, path forms), global hooks loaded by the IDE or the CLI, the shell that runs a hook command, the system-wide installer, `UpdateMode` as seen in Help > About, and `AuthPortalUrl`.
+- **Kiro itself on Windows.** In phases W1, W3 and W4 no Kiro IDE or CLI was installed on the Windows runner; phase WC installed the IDE but nobody opened it or signed in. Not exercised: Kiro reading `C:\ProgramData\Kiro\managed-settings.json`, the new Windows rules as matched by a Kiro client (case handling, aliases, path forms), global hooks loaded by the IDE or the CLI, the shell that runs a hook command, `UpdateMode` as seen in Help > About, and `AuthPortalUrl`. The system-wide installer was exercised in phase WC only as an installer.
 - **Windows 10/11.** The runner is Windows Server 2022. Kiro lists Windows 10/11 for the IDE and Windows 11 for the CLI.
 - **A logged-on standard user and a real Intune tenant.** The Intune execution contexts were simulated as SYSTEM from 64-bit and 32-bit PowerShell. The Intune Management Extension's own process, its re-evaluation schedule and supersedence were not exercised.
 - **macOS.** `lockdown-macos.sh` changed in this change (`auth_portal_url`). Only its dry-run tests ran (`L1.mdm-macos-dry-run` on the Linux runner, and on a developer Mac); there was no run as root on macOS.
@@ -250,6 +489,32 @@ LEFTOVERS total=0
 - The two `STALE` entries are the terminated runners, which the Resource Groups Tagging API still listed.
 - Checked again with separate AWS CLI calls after the scan: the harness stack no longer exists; 0 instances tagged `Project=kiro-fsi-test` in a state other than terminated; 0 buckets, 0 stacks and 0 SSM parameters with the test prefixes.
 - The harness ran for about three hours (02:36 to 05:39 UTC). The account resources that existed before the test were not modified.
+
+The second harness, used for the repeat of the `windows` stage and for WC runs 1 to 5 (created 06:59 to 07:04 UTC), was removed the same way after run 5 (07:43 to 07:46 UTC):
+
+```
+retained resources recorded: 0
+harness deleted (instances terminated)
+STALE ec2:instance (deleted; tagging API not yet updated)        (x3)
+LEFTOVERS total=0
+```
+
+- Two of the three `STALE` entries are this harness's runners. The third cannot be identified from the masked log; it is presumably a runner of the first harness (terminated 05:39 UTC) that the Resource Groups Tagging API still listed. The scan reports an instance as `STALE` only when EC2 itself says it is terminated or no longer knows it.
+- Checked again with separate AWS CLI calls after the scan (about 07:50 UTC), with the same result: no harness stack; 0 instances tagged `Project=kiro-fsi-test` in a state other than terminated; 0 buckets, 0 stacks and 0 SSM parameters with the test prefixes.
+- This harness ran for about 46 minutes. Kiro was uninstalled by run 5 before the runner was terminated.
+
+The third harness (WC runs 6 to 10 and a repeat of the `windows` stage; created 08:15 to 08:19 UTC) was removed at 08:54 to 08:58 UTC, and the fourth (a repeat of the `windows` stage and WC run 11; created 08:59 to 09:03 UTC) at 09:25 to 09:29 UTC. Both times:
+
+```
+retained resources recorded: 0
+harness deleted (instances terminated)
+STALE ec2:instance (deleted; tagging API not yet updated)        (x4 after the third harness, x6 after the fourth)
+LEFTOVERS total=0
+```
+
+- The scan output does not identify the `STALE` entries. The counts fit the two terminated runners of the harness just removed plus runners of earlier harnesses of the day that the Resource Groups Tagging API still listed.
+- Checked again with separate AWS CLI calls after each scan (08:58 and 09:29 UTC), with the same result as above: no harness stack, 0 instances in a state other than terminated, 0 buckets, 0 stacks, 0 SSM parameters.
+- Kiro was uninstalled by runs 10 and 11 before the runners were terminated. The third harness ran for about 43 minutes, the fourth for about 30.
 
 ## Run of 2026-10-10 (v1.9.1): full test
 
