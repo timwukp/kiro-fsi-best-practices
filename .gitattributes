@@ -1,0 +1,7 @@
+# agent-hooks/SHA256SUMS pins the bytes of the hook files, and the MDM scripts deploy them as they
+# are: keep LF on every platform. A CRLF checkout (the Git for Windows default, core.autocrlf=true)
+# would make every hash check fail and the deployment abort.
+agent-hooks/** text eol=lf
+mdm/** text eol=lf
+managed-settings/** text eol=lf
+*.sh text eol=lf

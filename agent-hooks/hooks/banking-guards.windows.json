@@ -1,0 +1,32 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "PII and secret guard (PowerShell)",
+      "description": "PowerShell port of pii-guard: block tool input containing secrets or Singapore personal data (PDPA; MAS TRM 11.1)",
+      "trigger": "PreToolUse",
+      "matcher": "*",
+      "action": { "type": "command", "command": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:/ProgramData/Kiro/hooks/pii-guard.ps1" },
+      "timeout": 5,
+      "enabled": true
+    },
+    {
+      "name": "Git history guard (PowerShell)",
+      "description": "PowerShell port of git-guard: block force-push, pushes to main/master and history rewrites (MAS TRM 6.3, 7.5)",
+      "trigger": "PreToolUse",
+      "matcher": "shell",
+      "action": { "type": "command", "command": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:/ProgramData/Kiro/hooks/git-guard.ps1" },
+      "timeout": 5,
+      "enabled": true
+    },
+    {
+      "name": "Destructive filesystem guard (PowerShell)",
+      "description": "PowerShell port of destructive-fs-guard: block recursive deletion of protected paths, .git removal, raw device writes and volume formatting (MAS TRM 11.3)",
+      "trigger": "PreToolUse",
+      "matcher": "shell",
+      "action": { "type": "command", "command": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:/ProgramData/Kiro/hooks/destructive-fs-guard.ps1" },
+      "timeout": 5,
+      "enabled": true
+    }
+  ]
+}

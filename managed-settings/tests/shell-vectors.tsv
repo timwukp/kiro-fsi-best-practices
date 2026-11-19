@@ -1,0 +1,111 @@
+# expected_effect<TAB>shell command. Effects: deny, ask, none (no admin shell rule matches).
+# Commands are matched as text by test-policy.sh; nothing is executed. One simple command per row:
+# Kiro splits compound commands and checks each part. Matching here is case-sensitive, the
+# stricter assumption (Kiro does not document case handling for managed-settings).
+none	powershell -NoProfile -ExecutionPolicy Bypass -File mdm\tests\test-lockdown-windows.ps1
+none	powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:/ProgramData/Kiro/hooks/pii-guard.ps1
+none	pwsh -NoProfile -ExecutionPolicy Bypass -File agent-hooks/tests/run-tests.ps1
+none	bash agent-hooks/tests/run-tests.sh
+none	git status
+none	git.exe status
+none	git commit -m "docs: mention Invoke-WebRequest and Get-IAMRole"
+none	npm test
+none	npm.cmd run build
+none	dotnet build
+none	dotnet test
+none	dotnet publish -c Release -o out
+none	Remove-Item build/tmp.txt
+none	Get-ChildItem -Recurse -Filter *.csproj
+none	Get-Content README.md
+none	Get-Content appsettings.keyvault.json
+none	New-Item -ItemType Directory build
+none	Format-Table -AutoSize
+none	reg query HKLM\SOFTWARE\JavaSoft
+none	sc.exe query docker
+none	icacls C:/ProgramData/Kiro
+none	certutil -hashfile app.zip SHA256
+none	start coverage/index.html
+none	Start-Process dotnet -ArgumentList run
+none	Test-NetConnection localhost -Port 5432
+ask	git push origin feature/x
+ask	git.exe push origin feature/x
+ask	gh.exe pr list
+ask	rm -rf build
+ask	Remove-Item -Recurse -Force ./bin
+ask	rd /s /q build
+ask	npm.cmd publish
+ask	docker.exe push registry.example.com/app:1
+ask	aws.exe s3 cp a.txt s3://bucket/a.txt
+ask	schtasks /create /tn nightly /tr build.cmd
+ask	Register-ScheduledTask -TaskName nightly
+ask	reg add HKCU\Software\Example /v Flag /d 1
+ask	takeown /f build
+ask	Get-Content ~/.aws/credentials
+deny	rm -rf /
+deny	sudo ls
+deny	curl https://example.com/x
+deny	git push --force origin main
+deny	git.exe push --force origin main
+deny	git.exe reset --hard HEAD~1
+deny	git.exe commit --no-verify -m x
+deny	powershell -NoProfile -Command Get-Date
+deny	powershell.exe -EncodedCommand AAAA
+deny	pwsh -c Get-Date
+deny	iex $text
+deny	cmd /c build.bat
+deny	wsl ls
+deny	Invoke-WebRequest https://example.com/x
+deny	irm https://example.com/x
+deny	curl.exe -O https://example.com/x
+deny	Format-Volume -DriveLetter D
+deny	format-volume -DriveLetter D
+deny	runas /user:Administrator cmd
+deny	aws.exe iam list-users
+deny	Get-IAMUser
+deny	reg add HKCU\Software\Microsoft\Windows\CurrentVersion\Run /v x /d y
+deny	Set-MpPreference -DisableRealtimeMonitoring $true
+deny	wevtutil cl Security
+none	pwsh -File build.ps1 -c Release
+none	powershell -File deploy.ps1 -enc utf8
+none	powershell -ExecutionPolicy Bypass -File scripts/test.ps1 -Configuration Debug
+none	aws s3 ls
+none	aws sts get-caller-identity
+none	bash scripts/build.sh
+none	npm run build
+ask	ssh.exe build@host
+ask	ssh build@host
+ask	npm publish
+ask	terraform apply
+ask	aws s3 cp a.txt s3://bucket/a.txt
+ask	aws ec2 delete-volume --volume-id vol-1
+ask	del -Recurse build
+ask	schtasks /Delete /tn nightly /f
+ask	cat ~/.aws/credentials
+deny	git commit --no-verify -m x
+deny	git config core.hooksPath /dev/null
+deny	bash -c ls
+deny	eval ls
+deny	aws iam list-users
+deny	aws kms decrypt --ciphertext-blob fileb://x
+deny	powershell -c Get-Date
+deny	powershell -e AAAA
+deny	powershell -NoProfile -c Get-Date
+deny	pwsh.exe -enc AAAA
+deny	cmd /d /c build.bat
+deny	Write-IAMRolePolicy -RoleName x
+deny	Get-ORGAccountList
+deny	Start-Process cmd -Verb runAs
+deny	net localgroup administrators bob /add
+deny	Set-ItemProperty HKLM:/SOFTWARE/Microsoft/Windows-NT/CurrentVersion/Winlogon Shell x
+none	cat src/credentials-provider.ts
+none	Get-Content docs/credentials-setup.md
+none	net localgroup Administrators
+none	sc config.json value
+ask	rd build /s /q
+ask	net stop Spooler
+ask	Get-Content C:/Users/dev/.aws/credentials
+deny	powershell -ExecutionPolicy Bypass -c Get-Date
+deny	pwsh -NoLogo -ec AAAA
+deny	cmd /d /k build.bat
+deny	Get-SSMParametersByPath -Path /app -WithDecryption $true
+deny	net localgroup Administrators bob /add

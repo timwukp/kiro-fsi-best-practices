@@ -9,7 +9,7 @@
 #   bundle      upload the current working tree (tracked + untracked, not ignored) to the results bucket
 #   linux       run L1 (CI parity), L2 (root MDM), L3 (chaos) on the Linux runner
 #   linux:<P>   run a single Linux phase (setup, L1, L2, L3) after fixing a failure
-#   windows     run W1 on the Windows runner
+#   windows     run W1, W3 and W4 on the Windows runner
 #   deploy      cdk bootstrap (if missing) + offline cdk synth + CloudFormation deploy of all 5 stacks
 #               (env=dev, singleton flags from preflight)
 #   verify      verify-deploy.sh against the deployed stacks (C1)
@@ -143,7 +143,7 @@ st_linux() {
 }
 st_windows() {
   [ -n "${WIN_ID:-}" ] && [ "$WIN_ID" != None ] || { log "no Windows runner"; return; }
-  ssm_run "$WIN_ID" AWS-RunPowerShellScript windows-W1 "$(windows_cmd)" 3600 || RC=1
+  ssm_run "$WIN_ID" AWS-RunPowerShellScript windows "$(windows_cmd)" 3600 || RC=1
 }
 cdk_flags() {
   local f="-c env=$ENVN"

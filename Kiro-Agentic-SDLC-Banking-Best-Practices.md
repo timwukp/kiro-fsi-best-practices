@@ -3,8 +3,8 @@
 
 > **Audience:** security architects, banking developers, cloud ops · **Purpose:** Sections 1–4 — authentication, network isolation, and VDI for a MAS-aligned Kiro deployment · **Prerequisites:** AWS Organization + enterprise IdP · ↩ [README](README.md)
 
-**Version:** 1.9  
-**Date:** October 2026  
+**Version:** 1.10  
+**Date:** November 2026  
 **Target Audience:** Development teams at Singapore financial institutions (banking reference implementation)  
 **Regulatory Frameworks:**
 - Monetary Authority of Singapore (MAS) Technology Risk Management (TRM) Guidelines (18 January 2021), which apply to all MAS-regulated financial institutions
@@ -582,7 +582,7 @@ NACLs are stateless, so return traffic needs ephemeral-port rules in both direct
 
 Amazon WorkSpaces has its own documented network requirements, separate from Kiro:
 - The WorkSpaces subnets must reach the directory (AWS Managed Microsoft AD, or AD Connector to your domain controllers) on the Active Directory ports (DNS, Kerberos, LDAP, SMB and related ports). WorkSpaces use the directory's DNS servers.
-- Streaming between users' WorkSpaces clients and their WorkSpaces (HTTPS 443, plus PCoIP 4172 or WSP 4195) goes through the WorkSpaces gateways, not through the Kiro egress path in your VPC.
+- Streaming between users' WorkSpaces clients and their WorkSpaces (HTTPS 443, plus PCoIP 4172 or DCV 4195; DCV was formerly called WSP) goes through the WorkSpaces gateways, not through the Kiro egress path in your VPC.
 
 See [IP address and port requirements for WorkSpaces Personal](https://docs.aws.amazon.com/workspaces/latest/adminguide/workspaces-port-requirements.html), [Configure a VPC for WorkSpaces Personal](https://docs.aws.amazon.com/workspaces/latest/adminguide/amazon-workspaces-vpc.html) and [AD Connector prerequisites](https://docs.aws.amazon.com/directoryservice/latest/admin-guide/prereq_connector.html).
 
@@ -752,7 +752,8 @@ aws route53 change-resource-record-sets \
 
 | Component | Specification | Justification |
 |-----------|---------------|---------------|
-| **Bundle Type** | PowerPro or GraphicsPro | High-performance for development workloads |
+| **Operating system** | Decide explicitly: a **BYOL Windows 11** image, or an AWS-provided **Windows Server** bundle | AWS-provided (licence-included) Windows bundles run Windows Server (2016, 2019, 2022 or 2025; AWS retires the 2016 bundles on 2027-01-12); Windows 10/11 is available only through BYOL ([bundles](https://docs.aws.amazon.com/workspaces/latest/adminguide/amazon-workspaces-bundles.html), [BYOL](https://docs.aws.amazon.com/workspaces/latest/adminguide/byol-windows-images.html), checked 2026-11-19). Kiro's [installation page](https://kiro.dev/docs/getting-started/installation/) lists Windows 10/11 for the IDE and Windows 11 for the CLI; Windows Server is not listed, which is not the same as unsupported. Use BYOL Windows 11 to stay inside Kiro's listed requirements, or confirm Windows Server support with Kiro and test it yourself. This repository's Windows scripts were tested on Windows Server 2022 without a Kiro client ([evidence](kiro-docs/aws-integration-test-evidence.md)) |
+| **Bundle Type** | PowerPro, or a Graphics bundle where the chosen operating system offers one | High-performance for development workloads |
 | **vCPU** | 8+ cores | Kiro AI processing + IDE + build tools |
 | **Memory** | 32 GB+ | Large codebases + AI context windows |
 | **Storage** | 175 GB SSD | Root volume + user volume separation |
@@ -903,12 +904,12 @@ if ($policy.rules | Where-Object { $_.effect -notin @('deny', 'ask') }) { throw 
 icacls $dir /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' | Out-Null
 ```
 
-With Intune, deploy the same file with a PowerShell script or Win32 app that runs in the system context and writes it the same way. Restart Kiro after every change; sign-in controls take effect at the next sign-in.
+With Intune, deploy it with the reference script [`mdm/lockdown-windows.ps1`](mdm/lockdown-windows.ps1) as a Win32 app in the system context, and detect and repair drift with the wrappers in [`mdm/intune/`](mdm/intune/): Intune Remediations treat only exit code 1 as an issue, so the script's own `-Check` exit code (3 on drift) cannot be used directly. Runbook: [`kiro-docs/intune-deployment.md`](kiro-docs/intune-deployment.md). Restart Kiro after every change; sign-in controls take effect at the next sign-in.
 
 **Caveats:**
 - **Client-enforced:** Kiro documents that these policies can be circumvented by a user with administrative access to the machine. Section 4.1.2 removes local administrator rights; keep it that way.
 - **Fails closed for permission rules, open for sign-in rules:** a malformed file, an `allow` effect or an unknown field blocks all of the agent's tool calls until the file is fixed; the same invalid file drops the sign-in restriction. Validate in the pipeline and on a pilot WorkSpace before rollout.
-- **Versions:** permission rules use the Kiro IDE 1.0+ / Kiro CLI V3 permission system, and sign-in controls need IDE 1.2+ / CLI 2.25.0+. Enforce a minimum client version (Kiro managed updates).
+- **Versions:** permission rules use the Kiro IDE 1.0+ / Kiro CLI V3 permission system, and sign-in controls need IDE 1.2+ / CLI 2.25.0+ (all minimums: [`kiro-docs/permissions-and-managed-settings.md`](kiro-docs/permissions-and-managed-settings.md#1-applicability)). Control client versions with Kiro managed updates (Section 4.2.3).
 - **Not covered:** Kiro Web (Cloud Sessions) and devices without the file. Keep Cloud Sessions off in the Kiro console.
 
 #### 4.2.2 Workspace-Level Config Prevention
@@ -919,7 +920,13 @@ No ACL change is needed to stop the agent from changing Kiro's configuration, an
 - **Workspace rules live outside the repository:** workspace permission rules are stored per user in `~/.kiro/workspace-roots/<hash>/permissions.yaml`, so a cloned repository cannot inject permission rules.
 - **Workspace trust:** a cloned repository can still contain `.kiro/settings/mcp.json`, steering, agents, skills and hooks. Leave unknown repositories untrusted: Kiro then does not load their MCP configuration, agents, steering, skills or workflows, and asks before every shell command and MCP tool call. Kiro does not document whether workspace hook files run in an untrusted workspace, so review `.kiro/hooks/` in third-party repositories.
 - **The developer can still edit user-level files** (`%USERPROFILE%\.kiro\settings\mcp.json`, `permissions.yaml`). That is why admin rules live in `managed-settings.json` and the MCP allow list lives in the registry: user files cannot weaken an admin `deny` or `ask`, and unlisted MCP servers stay hidden.
-- **Global hooks** deployed by MDM to `%USERPROFILE%\.kiro\hooks\` are defense in depth; see [`agent-hooks/README.md`](agent-hooks/README.md) for installation and for protecting them at the OS level.
+- **Global hooks** deployed by MDM to `%USERPROFILE%\.kiro\hooks\` (`mdm/lockdown-windows.ps1 -DeployHooks -InstallUser`, which installs the PowerShell guards) are defense in depth; see [`agent-hooks/README.md`](agent-hooks/README.md) for installation and for protecting them at the OS level.
+
+#### 4.2.3 Kiro Installer and Managed Updates (Windows)
+
+- **Per-user vs system-wide installer:** Kiro IDE **1.4.62** added Windows system-wide installers for x64 and ARM64 ([changelog](https://kiro.dev/changelog/ide/1-4-62/)). Bake the system-wide build into the WorkSpaces image, or deploy it with Intune as a Win32 app with install behaviour **System**, a file-based detection rule and an uninstall command. The per-user build installed in System context is expected to land in the SYSTEM profile, where users do not see it *(verify)*. Kiro does not document the install path, uninstall path or silent switches; [`kiro-docs/intune-deployment.md`](kiro-docs/intune-deployment.md#1-kiro-ide-per-user-vs-system-wide-installer) lists the expected values to confirm on a test WorkSpace. The IDE troubleshooting text "Kiro does not support system-level installation" is the error shown when the per-user build runs as Administrator, not a statement about the system-wide installer.
+- **Updates:** standard users cannot apply updates to a system-wide install, so set `HKLM\SOFTWARE\Policies\Kiro` → `UpdateMode` (REG_SZ) = `none`, as Kiro recommends for shared machines ([managed updates](https://kiro.dev/docs/enterprise/managed-updates/)), and update the image or the Win32 app instead. For a pilot-then-fleet rollout, point `UpdateUrl` (REG_SZ, same key) at a self-hosted update site that serves `metadata-win32-x64-system-stable.json` / `metadata-win32-arm64-system-stable.json`. Kiro CLI uses `update.baseUrl` in `HKLM\SOFTWARE\Policies\Kiro\CLI`. `mdm/lockdown-windows.ps1 -DisableUpdates` writes `UpdateMode` and reports drift.
+- **Limits:** pinning governs only the automatic update check; a user can still run the per-user installer, which needs no administrator rights. Kiro's managed-updates page (2026-10-29) suggests also blocking `prod.download.desktop.kiro.dev`, but the newer firewall page (2026-11-18) lists that host for the Powers registry and icons as well (Section 3.3), so do not block it fleet-wide without a pilot test.
 
 ### 4.3 Monitoring & Compliance
 

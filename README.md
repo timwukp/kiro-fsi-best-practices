@@ -45,6 +45,8 @@ Financial institutions face unique challenges when adopting AI development tools
 
 This guide addresses these challenges with practical reference implementations (validated by unit tests, cdk-nag, synth and an integration test in a sandbox AWS account; not a substitute for your own testing).
 
+> **Validation scope.** The integration test ran the CDK deployment, the Linux and Windows endpoint scripts and the hook guards; see the coverage table in [`kiro-docs/aws-integration-test-evidence.md`](kiro-docs/aws-integration-test-evidence.md#coverage-what-was-and-was-not-tested). It did **not** run Kiro IDE on any operating system, Kiro CLI on Windows or macOS, a Windows 10/11 client, or a real MDM tenant (Intune, Jamf, Kandji). Statements about Kiro's own behaviour come from the official Kiro documentation, with the date checked, or are marked *verify*; pilot them on your own devices.
+
 ---
 
 ## Start Here
@@ -63,6 +65,7 @@ New here? Use the map below to jump straight to what you need. **AI agents:** se
 | Go deeper: MCP, SDLC, PDPA, FEAT (Sections 5–14) | [`Kiro-Banking-Best-Practices-Part2.md`](Kiro-Banking-Best-Practices-Part2.md) |
 | Build a MAS-aligned Kiro Skill | [`Banking-Skills-Development-Guide.md`](Banking-Skills-Development-Guide.md) |
 | Install the defense-in-depth hooks and the reference agent | [`agent-hooks/README.md`](agent-hooks/README.md) |
+| Deploy Kiro and the admin policy to Windows with Microsoft Intune (system-wide installer, Win32 apps, Remediations, managed updates) | [`kiro-docs/intune-deployment.md`](kiro-docs/intune-deployment.md) |
 | Deploy the AWS infrastructure | [`cdk/`](cdk/) |
 | Check MAS TRM coverage | [Compliance Framework](#compliance-framework) |
 | Validate the controls (chaos harness, integration test in a sandbox AWS account) and read the evidence | [`kiro-docs/aws-integration-test-evidence.md`](kiro-docs/aws-integration-test-evidence.md), [`kiro-docs/chaos-pentest-evidence.md`](kiro-docs/chaos-pentest-evidence.md) |
@@ -140,10 +143,11 @@ New here? Use the map below to jump straight to what you need. **AI agents:** se
 | **[managed-settings/](managed-settings/README.md)** | Admin policy (`managed-settings.json` for Option A and Option B), user `permissions.yaml` template and MCP registry example, with deployment and validation steps | ✅ Complete |
 | **[agent-hooks/README.md](agent-hooks/README.md)** | Defense-in-depth hooks (secret/PII, git and destructive-command guards, audit) and the reference agent: installation, exit codes, tests | ✅ Complete |
 | **[kiro-docs/agent-runtime-governance.md](kiro-docs/agent-runtime-governance.md)** | Layer 4 governance model: admin policy, console settings, workspace trust, permissions, hooks, audit | ✅ Complete |
+| **[kiro-docs/intune-deployment.md](kiro-docs/intune-deployment.md)** | Windows runbook for Microsoft Intune: system-wide installer, Win32 app and staging, Remediations wrappers, managed updates, per-user hooks and steering, pilot checklist | ✅ Complete |
 | **[kiro-docs/mdm-endpoint-enforcement.md](kiro-docs/mdm-endpoint-enforcement.md)** | MDM deployment and drift detection for `managed-settings.json` and global hooks across Windows, macOS, Linux and VDI | ✅ Complete |
 | **[kiro-docs/mdm-test-evidence.md](kiro-docs/mdm-test-evidence.md)** | Sanitized Windows/macOS/Linux lockdown test results | ✅ Complete |
 | **[kiro-docs/chaos-pentest-evidence.md](kiro-docs/chaos-pentest-evidence.md)** | Chaos/pentest: non-privileged human + agent vs controls (findings + recommendations) | ✅ Complete |
-| **[kiro-docs/aws-integration-test-evidence.md](kiro-docs/aws-integration-test-evidence.md)** | Sanitized results of the sandbox-account integration test: real CDK deployment, Linux/Windows MDM, chaos harness, DNS Firewall egress, Kiro CLI, teardown | ✅ Complete |
+| **[kiro-docs/aws-integration-test-evidence.md](kiro-docs/aws-integration-test-evidence.md)** | Sanitized results of the sandbox-account integration test, with method, runs and a coverage table: Linux/Windows MDM, Intune wrappers, PowerShell hook guards and chaos harness (2026-11-19); real CDK deployment, DNS Firewall egress, Kiro CLI on Linux (2026-10-10); teardown of both runs | ✅ Complete |
 | **[SECURITY.md](SECURITY.md)** | Security vulnerability reporting policy | ✅ Complete |
 
 ### Kiro Skills (Reference Implementations)
@@ -649,9 +653,10 @@ For questions, issues, or feedback:
 | 1.8 | 2026-06-05 | MDM endpoint enforcement (`mdm/`), `destructive-fs-guard` hook, chaos/pentest harness and evidence, Key Features update (later corrected in 1.9) |
 | 1.9 | 2026-10-09 | Repository renamed to `kiro-fsi-best-practices`. Correction release: MAS regulatory citations (TRM remap, FSM-N05 1 h / 14 days, Notice 658, AI Risk Management Guidelines), data location (no Singapore profile region) and allowlisted egress, Kiro 1.x governance (`managed-settings/`, fail-closed hooks), CDK hardening (5 stacks, 19 Config rules, 86 tests), tested PII patterns, Mermaid diagrams, CI on Node.js 22 |
 | 1.9.1 | 2026-10-10 | Integration test in a sandbox AWS account (real deployment of all 5 stacks, Linux/Windows MDM, chaos harness, DNS Firewall egress, Kiro CLI) and the fixes it found: dependency upgrade with no high/critical `npm audit` findings and a blocking CI audit, ESLint 9, npm 10 lockfile, `-c egressAllowedDomains=`, scoped RDS Config rules, chaos evidence records, 91 tests |
+| 1.10 | 2026-11-19 | Windows / Intune (issue #42): Intune detection fixed (staged sources + Remediations and Win32 detection wrappers with correct exit codes), system-wide installer and managed-updates guidance, `-DisableUpdates`, PowerShell hook guards with per-profile install, Windows rules in the admin policy (19 → 34 rules) with policy regression tests, `auth_portal_url` validation, `lockdown-windows.ps1` no longer trusts pre-existing files and folders, Enterprise Management (preview), CLI 3.x version notes, Windows CI job |
 
 ---
 
-**Version:** 1.9.1
-**Last Updated:** October 10, 2026
+**Version:** 1.10
+**Last Updated:** November 19, 2026
 **Maintained By:** Security Architecture Team

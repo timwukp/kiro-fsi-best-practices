@@ -1,0 +1,268 @@
+# expected_exit	hook	shell command (tool_input.command)	[known_gap]
+# 2 = must be blocked, 0 = must be allowed. Commands are parsed as text by the guards; never executed.
+# Windows PowerShell and cmd forms for the PowerShell ports in agent-hooks/windows/.
+# --- destructive-fs-guard: blocked (recursive delete / format / .git) ---
+2	destructive-fs-guard	Remove-Item -Recurse -Force C:\
+2	destructive-fs-guard	rd /s /q C:\
+2	destructive-fs-guard	cmd /c "rd /s /q C:\Windows"
+2	destructive-fs-guard	Remove-Item -Recurse "C:\Program Files"
+2	destructive-fs-guard	Remove-Item -Recurse -Force "C:\Program Files (x86)"
+2	destructive-fs-guard	Remove-Item -LiteralPath $env:USERPROFILE -Recurse
+2	destructive-fs-guard	Remove-Item -Recurse ${env:ProgramFiles(x86)}
+2	destructive-fs-guard	del /s /q %USERPROFILE%
+2	destructive-fs-guard	rd /s /q %SystemRoot%
+2	destructive-fs-guard	cmd /c "del /s /q %ProgramFiles%"
+2	destructive-fs-guard	erase /s C:\ProgramData
+2	destructive-fs-guard	Remove-Item -r -Force C:\Users\Public
+2	destructive-fs-guard	ri -Recurse -Force ~
+2	destructive-fs-guard	Remove-Item -Recurse -Force \
+2	destructive-fs-guard	Remove-Item .git -Recurse -Force
+2	destructive-fs-guard	del C:\Windows\System32\drivers\etc\.git
+2	destructive-fs-guard	Move-Item .git C:\temp\g
+2	destructive-fs-guard	Rename-Item .git oldgit
+2	destructive-fs-guard	Format-Volume -DriveLetter C
+2	destructive-fs-guard	format D: /q
+2	destructive-fs-guard	Clear-Disk -Number 0
+2	destructive-fs-guard	Initialize-Disk -Number 1
+2	destructive-fs-guard	diskpart /s script.txt
+2	destructive-fs-guard	cipher /w:C:
+2	destructive-fs-guard	git status; Remove-Item -Recurse -Force C:\Users
+# --- destructive-fs-guard: allowed (scoped paths / non-removal) ---
+0	destructive-fs-guard	Remove-Item -Recurse .\build
+0	destructive-fs-guard	Remove-Item -Recurse -Force C:\projects\app\node_modules
+0	destructive-fs-guard	Remove-Item C:\temp\x.txt
+0	destructive-fs-guard	Remove-Item -LiteralPath C:\temp\scratch -Recurse
+0	destructive-fs-guard	rd /s /q build
+0	destructive-fs-guard	del C:\temp\log.txt
+0	destructive-fs-guard	Get-ChildItem -Recurse
+0	destructive-fs-guard	Copy-Item -Recurse a b
+0	destructive-fs-guard	Remove-Item .gitignore
+0	destructive-fs-guard	Move-Item src\a.txt dst\b.txt
+0	destructive-fs-guard	Rename-Item report.docx final.docx
+# --- git-guard: blocked (force / protected branch / rewrite, incl. wrappers) ---
+2	git-guard	powershell -NoProfile -Command "git push -f"
+2	git-guard	& git.exe push --force origin main
+2	git-guard	pwsh -c "git reset --hard"
+2	git-guard	cmd /c "git push --mirror"
+2	git-guard	git push `-f origin x
+2	git-guard	git branch -D main
+# --- git-guard: allowed (feature-branch work) ---
+0	git-guard	git.exe push origin feature/x
+0	git-guard	git push origin feature/x
+0	git-guard	git push -u origin feature/x
+0	git-guard	powershell -Command "git status"
+0	git-guard	git commit -m "fix: windows ps hooks"
+0	git-guard	git reset --soft HEAD~1
+# ===== Hardening rows (adversarial review). Each group: forms that must block, then nearby routine forms that must pass. =====
+# --- git-guard: git called by a quoted path that contains a space (default Git for Windows location) ---
+2	git-guard	& "C:\Program Files\Git\cmd\git.exe" push --force origin main
+2	git-guard	"C:\Program Files\Git\bin\git.exe" reset --hard
+2	git-guard	& 'C:\Program Files (x86)\Git\cmd\git.exe' push origin main
+2	git-guard	powershell -Command "& 'C:\Program Files\Git\cmd\git.exe' push -f"
+0	git-guard	& "C:\Program Files\Git\cmd\git.exe" status
+0	git-guard	& "C:\Program Files\Git\cmd\git.exe" push origin feature/x
+# --- git-guard: commands inside ( ), $( ) and script blocks { } ---
+2	git-guard	(git push --force)
+2	git-guard	echo $(git push --force)
+2	git-guard	if ($?) { git push --force }
+2	git-guard	& { git push -f }
+2	git-guard	powershell -Command { git push -f }
+0	git-guard	git stash drop stash@{0}
+0	git-guard	if ($?) { git push origin feature/x }
+# --- git-guard: a single & is a separator (not inside 2>&1); cmd caret escapes are removed ---
+2	git-guard	cmd /c "cd repo & git push --force"
+2	git-guard	git status & git push -f
+2	git-guard	&git push -f
+2	git-guard	&"git" push -f
+2	git-guard	cmd /c git pu^sh --force
+2	git-guard	git push 2>&1 --force
+0	git-guard	git status 2>&1
+0	git-guard	git push origin feature 2>&1
+0	git-guard	git status & git log --oneline -5
+0	git-guard	git reset --soft HEAD^
+# --- git-guard: every wrapper is unwrapped (seven in one command line) ---
+2	git-guard	sh -c "echo 1"; sh -c "echo 2"; sh -c "echo 3"; sh -c "echo 4"; sh -c "echo 5"; sh -c "echo 6"; sh -c "git push -f"
+0	git-guard	sh -c "echo 1"; sh -c "echo 2"; sh -c "echo 3"; sh -c "echo 4"; sh -c "echo 5"; sh -c "echo 6"; sh -c "git status"
+# --- git-guard: more wrapper invocation forms ---
+2	git-guard	cmd /d /s /c "git push --force"
+2	git-guard	cmd /c"git push -f"
+2	git-guard	powershell -Comm "git push -f"
+2	git-guard	powershell "git push --force"
+2	git-guard	powershell git push --force
+2	git-guard	powershell -ExecutionPolicy Bypass -NoProfile git push --force
+2	git-guard	& "C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -c "git reset --hard"
+0	git-guard	powershell -File build.ps1
+0	git-guard	cmd /d /c "git status"
+0	git-guard	powershell "git push origin feature/x"
+# --- git-guard: text inside a quoted argument is not a command ---
+0	git-guard	git commit -m "docs: never run git push --force; open a pull request"
+# --- destructive-fs-guard: commands inside ( ), $( ) and script blocks { } ---
+2	destructive-fs-guard	echo $(rm -rf ~)
+2	destructive-fs-guard	(rm -rf /)
+2	destructive-fs-guard	Get-ChildItem C:\Users | ForEach-Object { Remove-Item -Recurse -Force C:\Users }
+2	destructive-fs-guard	if (Test-Path .git) { Remove-Item -Recurse -Force .git }
+2	destructive-fs-guard	try { rd /s /q C:\ } catch {}
+2	destructive-fs-guard	& { Remove-Item -Recurse -Force $HOME }
+0	destructive-fs-guard	Get-ChildItem .\build | ForEach-Object { Remove-Item -Recurse $_.FullName }
+0	destructive-fs-guard	if (Test-Path .\build) { Remove-Item -Recurse .\build }
+0	destructive-fs-guard	rm -rf ./{build,dist}
+# --- destructive-fs-guard: a single & is a separator; cmd caret escapes are removed ---
+2	destructive-fs-guard	cmd /c "cd \ & rd /s /q C:\Users"
+2	destructive-fs-guard	git status & Remove-Item -Recurse -Force C:\Users
+2	destructive-fs-guard	cmd /c rd /s /q C:\Win^dows
+0	destructive-fs-guard	cmd /c "cd build & rd /s /q obj"
+0	destructive-fs-guard	Remove-Item -Recurse .\build 2>&1
+# --- destructive-fs-guard: every wrapper is unwrapped; more wrapper invocation forms ---
+2	destructive-fs-guard	cmd /c "echo 1"; cmd /c "echo 2"; cmd /c "echo 3"; cmd /c "echo 4"; cmd /c "echo 5"; cmd /c "echo 6"; cmd /c "rd /s /q C:\"
+0	destructive-fs-guard	cmd /c "echo 1"; cmd /c "echo 2"; cmd /c "echo 3"; cmd /c "echo 4"; cmd /c "echo 5"; cmd /c "echo 6"; cmd /c "rd /s /q build"
+2	destructive-fs-guard	cmd.exe /s /c "rd /s /q C:\Users"
+2	destructive-fs-guard	powershell "Remove-Item -Recurse -Force C:\Users"
+2	destructive-fs-guard	& "C:\Windows\System32\cmd.exe" /c "rd /s /q C:\Users"
+0	destructive-fs-guard	powershell -NoProfile -Command "Remove-Item -Recurse .\build"
+0	destructive-fs-guard	powershell -File .\clean.ps1
+# --- destructive-fs-guard: comma-separated path lists ---
+2	destructive-fs-guard	Remove-Item -Recurse -Force .git, build
+2	destructive-fs-guard	Remove-Item -Recurse -Force node_modules,.git,dist
+2	destructive-fs-guard	Remove-Item -Recurse C:\Users,C:\temp
+2	destructive-fs-guard	rm -r -fo .git, build
+2	destructive-fs-guard	Remove-Item -Recurse -Path '.git','build'
+2	destructive-fs-guard	Remove-Item -Recurse -Force @('.git','build')
+0	destructive-fs-guard	Remove-Item -Recurse -Force build, dist
+0	destructive-fs-guard	Remove-Item -Force .gitignore, .github
+# --- destructive-fs-guard: more spellings of protected paths; -Recurse:$true ---
+2	destructive-fs-guard	Remove-Item C:\Users -Recurse:$true -Force
+2	destructive-fs-guard	Remove-Item -Recurse -Force $PWD
+2	destructive-fs-guard	Remove-Item -Recurse $PWD\*
+2	destructive-fs-guard	del /s /q *.*
+2	destructive-fs-guard	Remove-Item -Recurse ${env:USERPROFILE}
+2	destructive-fs-guard	rd /s /q %HOMEDRIVE%%HOMEPATH%
+2	destructive-fs-guard	Remove-Item -Recurse $env:APPDATA
+2	destructive-fs-guard	rd /s /q %ProgramFiles(x86)%
+2	destructive-fs-guard	rm -rf /c/Users
+0	destructive-fs-guard	Remove-Item -Recurse $PWD\build
+0	destructive-fs-guard	rm -rf /c/work/build
+0	destructive-fs-guard	Remove-Item C:\temp\scratch -Recurse:$true
+0	destructive-fs-guard	Remove-Item -Recurse $env:APPDATA\myapp\cache
+# --- destructive-fs-guard: -Exclude names what is kept; -Include / -Filter are only checked for .git ---
+0	destructive-fs-guard	Remove-Item .\vendor\* -Recurse -Force -Exclude .git
+0	destructive-fs-guard	Remove-Item .\build -Recurse -Include *
+2	destructive-fs-guard	Remove-Item src\..\* -Include .git -Recurse -Force
+2	destructive-fs-guard	Remove-Item .\* -Recurse -Exclude .git
+2	destructive-fs-guard	rm -fi -r /
+# ===== Second hardening round (recheck). =====
+# --- escaped quotes must not hide the command that follows (backslash-quote, backtick-quote, doubled quotes) ---
+2	git-guard	bash -c "git commit -m \"a b\" && git push -f"
+2	git-guard	bash -c "git add . && git commit -m \"wip stuff\" && git push --force origin main"
+2	git-guard	powershell -Command "git commit -m `"a b`"; git push -f"
+2	git-guard	cmd /c "git commit -m \"a b\" && git push -f"
+2	git-guard	Write-Host "5`" pipe"; git push -f; Write-Host "6`" pipe"
+2	git-guard	cd "C:\my dir\"; Write-Host "5`" pipe"; git push -f; Write-Host "6`" pipe"
+2	git-guard	Write-Host "say ""hi"" now"; git push -f
+2	git-guard	Write-Host 'it''s done'; git push -f
+2	git-guard	bash -c 'echo '\''a b'\''; git push -f'
+0	git-guard	git commit -m "say \"hi\" to users"
+0	git-guard	git commit -m "say `"hi`" to users"
+0	git-guard	git commit -m "say ""hi"" to users"
+0	git-guard	bash -c "git commit -m \"a b\" && git push origin feature/x"
+0	git-guard	cd "C:\my repo\"; git push origin feature/x
+0	git-guard	Write-Host "tip: `"git push -f`" is blocked; use a PR"
+2	destructive-fs-guard	powershell -Command "Write-Host `"a b`"; Remove-Item -Recurse -Force C:\Users"
+2	destructive-fs-guard	cmd /c "echo \"a b\" & rd /s /q C:\Users"
+2	destructive-fs-guard	bash -c "echo \"a b\"; rm -rf ~"
+0	destructive-fs-guard	Remove-Item -Recurse "C:\work\my app\build\"; cd ..
+0	destructive-fs-guard	Remove-Item -Recurse "C:\Users\Jane Doe\proj\build\"
+0	destructive-fs-guard	Remove-Item -Recurse 'C:\Users\Jane Doe\proj\build\'
+0	destructive-fs-guard	powershell -Command "Write-Host `"a b`"; Remove-Item -Recurse .\build"
+# --- a command in parentheses is not a list of targets; a list of literals is ---
+0	destructive-fs-guard	Remove-Item -Recurse -Force (Join-Path $PWD 'node_modules')
+0	destructive-fs-guard	Remove-Item -Recurse -Force (Join-Path $env:LOCALAPPDATA 'MyApp\Cache')
+0	destructive-fs-guard	Remove-Item -Recurse -Force (Join-Path $env:APPDATA 'MyApp')
+0	destructive-fs-guard	Remove-Item -Recurse -Force -Path (Join-Path $PWD 'build')
+0	destructive-fs-guard	Remove-Item (Get-ChildItem . -Filter *.tmp) -Recurse
+0	destructive-fs-guard	Remove-Item (Get-ChildItem . -Recurse -Filter *.tmp).FullName
+0	destructive-fs-guard	Remove-Item -Recurse -Force ($env:USERPROFILE + '\scratch')
+2	destructive-fs-guard	Remove-Item -Recurse -Force @('.git', 'build')
+2	destructive-fs-guard	Remove-Item -Recurse -Force ('.git', 'build')
+2	destructive-fs-guard	Remove-Item -Recurse -Force -Path @('.git', 'build')
+2	destructive-fs-guard	Remove-Item -Recurse -Force @('build', '.git')
+2	destructive-fs-guard	Remove-Item -Recurse @("C:\Users", "D:\x")
+2	destructive-fs-guard	Remove-Item -Recurse -Force ($HOME)
+2	destructive-fs-guard	Remove-Item -Recurse -Force ($env:USERPROFILE, $env:APPDATA)
+0	destructive-fs-guard	Remove-Item -Recurse -Force @('build', 'dist')
+0	destructive-fs-guard	Remove-Item -Recurse -Force ('.\out', '.\obj')
+# --- Invoke-Expression / iex is a wrapper ---
+2	git-guard	iex "cd repo; git push --force"
+2	git-guard	Invoke-Expression "git push --force"
+2	git-guard	Invoke-Expression 'git reset --hard'
+2	git-guard	Invoke-Expression -Command "git push -f"
+0	git-guard	iex "git status; git log --oneline -5"
+2	destructive-fs-guard	Invoke-Expression "Remove-Item -Recurse -Force C:\Users"
+0	destructive-fs-guard	Invoke-Expression "Remove-Item -Recurse -Force .\build"
+# --- a PowerShell assignment in front of the command ---
+2	git-guard	$r = git push --force
+2	git-guard	$out = git push --force origin feature 2>&1
+2	git-guard	$null = git reset --hard
+2	git-guard	$x=git push -f
+2	git-guard	[string]$r = git push -f
+0	git-guard	$b = "feature/x"; git push origin $b
+0	git-guard	$out = git push origin feature/x 2>&1
+0	git-guard	$log = git log --oneline -5
+2	destructive-fs-guard	$null = Remove-Item -Recurse -Force C:\Users
+2	destructive-fs-guard	$r = rd /s /q C:\Windows
+2	destructive-fs-guard	$x = Remove-Item .git -Recurse -Force
+0	destructive-fs-guard	$files = Get-ChildItem build
+0	destructive-fs-guard	$null = Remove-Item -Recurse -Force .\build
+# --- cmd /c "..." with nested quotes: cmd removes the first and the last quote ---
+2	git-guard	cmd /s /c ""C:\Program Files\Git\cmd\git.exe" push --force"
+2	git-guard	cmd.exe /d /s /c ""C:\Program Files\Git\cmd\git.exe" push --force origin main"
+2	git-guard	cmd /c ""C:\Program Files\Git\cmd\git.exe" reset --hard"
+0	git-guard	cmd /s /c ""C:\Program Files\Git\cmd\git.exe" status"
+0	git-guard	cmd /s /c ""C:\Program Files\Git\cmd\git.exe" push origin feature/x"
+2	destructive-fs-guard	cmd /c "rd /s /q "C:\Program Files""
+0	destructive-fs-guard	cmd /c "rd /s /q "C:\work\my app\build""
+0	destructive-fs-guard	cmd /c "npm run build"
+# --- pwsh -CommandWithArgs; powershell -Command with extra arguments ---
+2	git-guard	pwsh -CommandWithArgs "git push -f" a b
+2	git-guard	powershell -Command "git push -f" a b
+0	git-guard	pwsh -CommandWithArgs "git status" a b
+# --- glued cmd switches, root-relative paths after rd/del, Move-Item / Rename-Item aliases ---
+2	destructive-fs-guard	rd /s/q C:\Users
+2	destructive-fs-guard	rd/s/q C:\Users
+2	destructive-fs-guard	del/s/q C:\Users
+2	destructive-fs-guard	del -Recurse -Force /
+2	destructive-fs-guard	rd -Recurse -Force /Users
+2	destructive-fs-guard	mi .git x
+2	destructive-fs-guard	rni .git old
+0	destructive-fs-guard	rd /s/q build
+0	destructive-fs-guard	rd/s/q build
+0	destructive-fs-guard	del /q *.log
+0	destructive-fs-guard	del /f/q build\out.log
+0	destructive-fs-guard	mi old.txt new.txt
+# --- routine commands that must stay allowed (false-positive guard) ---
+0	git-guard	git commit -m "fix (scope): message"
+0	git-guard	git log --format='%h %s' main..feature
+0	git-guard	git branch -d merged-branch
+0	git-guard	npm run build && npm test
+0	git-guard	docker run --rm -v ${PWD}:/app img
+0	git-guard	dotnet clean; dotnet build
+0	git-guard	cmd /c "npm run build"
+0	git-guard	powershell -File .\build.ps1 -Clean
+0	git-guard	pwsh -c "Get-ChildItem"
+0	git-guard	$files = Get-ChildItem build
+0	destructive-fs-guard	Remove-Item .\build -Recurse -Force
+0	destructive-fs-guard	Remove-Item -Recurse node_modules, dist
+0	destructive-fs-guard	Get-ChildItem . -Recurse | Where-Object { $_.Name -like '*.tmp' } | Remove-Item
+0	destructive-fs-guard	rm -rf ./node_modules
+0	destructive-fs-guard	if (Test-Path build) { Remove-Item build -Recurse }
+0	destructive-fs-guard	foreach ($f in $files) { Remove-Item $f }
+0	destructive-fs-guard	docker run --rm -v ${PWD}:/app img
+0	destructive-fs-guard	dotnet clean; dotnet build
+0	destructive-fs-guard	mv old.txt new.txt
+0	destructive-fs-guard	Move-Item .github\old.yml .github\new.yml
+0	destructive-fs-guard	powershell -File .\build.ps1 -Clean
+0	destructive-fs-guard	pwsh -c "Get-ChildItem"
+0	destructive-fs-guard	npm run build && npm test
+0	destructive-fs-guard	Write-Host "it's done; cleaning up" ; Remove-Item .\build -Recurse
+0	destructive-fs-guard	git commit -m "fix (scope): message"
+# known_gap: variable indirection - the path is held in a PowerShell variable, not a literal, so text parsing cannot resolve it.
+2	destructive-fs-guard	$p='C:\'; Remove-Item -Recurse -Force $p	known_gap

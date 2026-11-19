@@ -1,7 +1,7 @@
 # Kiro Permissions, Managed Settings, Hooks and Custom Agents (Reference Snapshot)
 
 > **Source:** kiro.dev: [Permissions](https://kiro.dev/docs/permissions/) (updated 2026-10-01), [Permission policies](https://kiro.dev/docs/enterprise/governance/permissions/) (2026-09-12), [Sign-in controls](https://kiro.dev/docs/enterprise/governance/sign-in/) (2026-09-30), [Hooks](https://kiro.dev/docs/hooks/) and [Hook triggers](https://kiro.dev/docs/hooks/types/) (2026-09-30), [Hook actions](https://kiro.dev/docs/hooks/actions/) (2026-08-04), [Custom agents](https://kiro.dev/docs/custom-agents/) (2026-09-02) and the [configuration reference](https://kiro.dev/docs/custom-agents/configuration-reference/) (2026-10-02).
-> **Last verified:** 2026-10-08.
+> **Last verified:** 2026-10-08 for the pages above; the applicability table and the minimum versions below were re-checked on 2026-11-19 against the [changelog](https://kiro.dev/changelog/), [Sign-in controls](https://kiro.dev/docs/enterprise/governance/sign-in/), [Hook triggers](https://kiro.dev/docs/hooks/types/), [Enterprise Management](https://kiro.dev/docs/enterprise/enterprise-management/) and [Choose an agent harness](https://kiro.dev/docs/cli/agent-harness/).
 >
 > Condensed, banking-oriented snapshot for offline use. Where official pages conflict, the newer page is followed and the conflict is noted. Deployable files that implement this reference are in [`../managed-settings/`](../managed-settings/) and [`../agent-hooks/`](../agent-hooks/).
 
@@ -9,13 +9,23 @@
 
 | Feature | Kiro IDE | Kiro CLI |
 |---------|----------|----------|
-| Capability-based permissions (`permissions.yaml`) | 1.0+ (GA 2026-06-25) | V3 engine (`kiro-cli --v3`), shipped in CLI 2.x; there is no CLI 3.x binary |
+| Capability-based permissions (`permissions.yaml`) | 1.0+ (GA 2026-06-25) | V3 agent harness: the default in CLI 3.0.0+ for interactive sessions and headless runs with `--trust-all-tools`; `kiro-cli --v3` in CLI 2.x. A headless run with no harness named starts on V2, so name it (`kiro-cli chat --v3 --no-interactive`) |
 | Admin permission policies (`managed-settings.json`) | Minimum version not stated; requires the 1.x permission system. Verify on your version | Same (V3 engine) |
 | Sign-in controls (same file) | 1.2+ | 2.25.0+ |
 | v1 hook files (`.kiro/hooks/*.json`) | 1.0+ | V3 engine |
 | Kiro Web | Not applicable: Web runs in an isolated cloud sandbox; `permissions.yaml`, admin policies and sign-in controls do not apply | |
 
-Latest versions on 2026-10-08: IDE 1.2.37 (2026-10-05), CLI 2.28.0 (2026-10-05).
+"V3" names the CLI agent harness, not the 3.x version number; Kiro's pages still say "V3 sessions". Current versions: [changelog](https://kiro.dev/changelog/) (on 2026-11-19: IDE 1.4.236 and CLI 3.5.0).
+
+**Minimum client versions** (checked 2026-11-19):
+
+| Feature | Kiro IDE | Kiro CLI | Source |
+|---------|----------|----------|--------|
+| Sign-in controls (`signin_method`, `settings`) | 1.2 | 2.25.0 | [Sign-in controls](https://kiro.dev/docs/enterprise/governance/sign-in/) |
+| Windows system-wide installer | 1.4.62 | — | [IDE 1.4.62](https://kiro.dev/changelog/ide/1-4-62/) |
+| V3 harness by default, single `kiro-cli` binary | — | 3.0.0 | [CLI 3.0.0](https://kiro.dev/changelog/cli/3-0/) |
+| Enterprise Management (preview) | 1.4.154 | 3.1.0 | [Enterprise Management](https://kiro.dev/docs/enterprise/enterprise-management/) |
+| `PermissionRequest` hook; Pre Tool Use `updatedInput` | 1.4.236 | 3.4.0 | [Hook triggers](https://kiro.dev/docs/hooks/types/) |
 
 ## 2. Permissions (`permissions.yaml`)
 
@@ -103,9 +113,10 @@ The second example denies every domain except the excluded ones; excluded domain
 
 - Rule: `{"capability": "signin_method", "match": ["*"], "exclude": ["<kept methods>"], "effect": "deny"}`. Effect must be exactly `deny`; anything else (including `allow`, `ask`, `Deny`) makes Kiro ignore the restriction with a warning. At most 16 entries across `match` and `exclude`. If several rules exist, a method denied by any of them is denied.
 - Method names (case-sensitive): `idc`, `external_idp`, `builder_id`, `google`, `github`, `social` (Google and GitHub). Screen labels and internal identifiers (`awsidc`, `builderid`) are not valid.
-- Settings keys (optional, strings ≤ 2,048 characters, URLs must be https): `idc_start_url`, `idc_region`, `external_idp_domain`, `external_idp_start_url`, `external_idp_region` (without it Kiro looks up the organization across Regions), `signin_help_url` (rendered by the client only, so an internal URL is fine).
+- Settings keys (optional, strings of at most 2,048 bytes of UTF-8 without control characters, URLs must be https): `idc_start_url`, `idc_region`, `external_idp_domain`, `external_idp_start_url`, `external_idp_region` (without it Kiro looks up the organization across Regions), `signin_help_url` (rendered by the client only, so an internal URL is fine), `auth_portal_url` (Kiro CLI 3.5.0+: the portal that `kiro-cli login` opens in the browser instead of `https://app.kiro.dev`; an https URL with no credentials, query or fragment).
+- **Sign-in portal (Kiro CLI 3.5.0+, browser sign-in only, re-checked 2026-11-19):** Kiro CLI takes the portal from the first source that is set: (1) the `AuthPortalUrl` OS policy (Windows: a string value under `HKLM\SOFTWARE\Policies\Kiro`; macOS: a forced managed preference in the `dev.kiro.desktop` domain; Linux has no OS policy store), (2) `auth_portal_url` in `managed-settings.json`, (3) the user's `KIRO_AUTH_PORTAL_URL` environment variable, then the user's own setting and the default. The two administrator sources win over the user sources. A policy value of the wrong type reads as unset; a value that is present but invalid sends users to the default portal, never to their own settings. If no administrator source is set, the user's environment variable applies and is not validated. Kiro's page describes the portal for the CLI only, not for the IDE.
 - Read when a sign-in starts (next sign-in). The client re-checks the method when the browser returns and refuses a denied method before a token is issued.
-- **Fail open:** an invalid/unreadable file, a BOM, non-UTF-8 encoding, rules that deny every method or none, unrecognized `exclude` names or more than 16 entries drop the restriction and offer every method. Because the same file carries permission policies, an invalid file also blocks the agent's tools. Unknown settings keys are ignored.
+- **The method restriction fails open** (the portal selection above does not): an invalid/unreadable file, a BOM, non-UTF-8 encoding, rules that deny every method or none, unrecognized `exclude` names or more than 16 entries drop the restriction and offer every method. Because the same file carries permission policies, an invalid file also blocks the agent's tools. Unknown settings keys are ignored.
 - Not applied in Kiro Web or on devices without the file; older clients ignore it. Controlling who can use Kiro remains the job of the IdP and Kiro subscriptions.
 
 ```json

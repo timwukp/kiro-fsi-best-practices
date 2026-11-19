@@ -2,7 +2,7 @@
 
 Layer 4 (Application) of the Security Architecture in the root `README.md`: the controls that decide what the Kiro agent may read, write, execute and send while a session runs. Layers 1-3 and 5 (identity, network, VDI, monitoring) secure everything around Kiro; this layer governs the agent itself.
 
-> **Last verified:** 2026-10-08 against the official Kiro documentation (links in [References](#references)). Applies to Kiro IDE 1.x and the Kiro CLI V3 engine (`kiro-cli --v3`, shipped in CLI 2.x; there is no CLI 3.x binary). Latest versions on that date: IDE 1.2.37 and CLI 2.28.0. Kiro changes quickly: re-check the pages and pilot every upgrade.
+> **Last verified:** 2026-10-08 against the official Kiro documentation (links in [References](#references)); the version notes and the Enterprise Management note were re-checked on 2026-11-19. Applies to Kiro IDE 1.x and the Kiro CLI V3 agent harness: the default in CLI 3.0.0+ (a single `kiro-cli` binary), and `kiro-cli --v3` in CLI 2.x. "V3" names the harness, not the 3.x version. Current versions: [changelog](https://kiro.dev/changelog/) (on 2026-11-19: IDE 1.4.236, CLI 3.5.0); minimum versions per feature: [`permissions-and-managed-settings.md`](permissions-and-managed-settings.md#1-applicability). Kiro changes quickly: re-check the pages and pilot every upgrade.
 
 ## Read this first: the enforcement boundary
 
@@ -57,6 +57,8 @@ Set these in Kiro console > Settings > Shared settings. Details and changelog re
 - **Cloud Sessions:** keep **off**. They run in us-east-1 only, and the customer managed KMS key, MCP configuration, MCP registry, model availability and `managed-settings.json` do not apply to Kiro Web.
 - **Prompt logging:** turn on (see 4f).
 
+**Enterprise Management (preview).** Kiro Enterprise Management delivers rules, settings and files (steering, Skills, Powers) from the Kiro service; it is in preview in us-east-1 only, needs IDE 1.4.154+ / CLI 3.1.0+, and migrating an existing profile to it is one-way ([official page](https://kiro.dev/docs/enterprise/enterprise-management/), checked 2026-11-19). It may take over this layer and steering distribution. It is separate from `managed-settings.json`, which stays the device-level baseline (4a). Models and API keys are denied until a rule allows them, but the controls Kiro creates for a new profile allow every model, so apply the model rules above before rollout. Details: [`security-governance-features.md`](security-governance-features.md#29-enterprise-management-preview).
+
 ### 4c. Workspace trust
 
 A workspace is untrusted until the user trusts it. The decision is stored outside the workspace, so a repository cannot trust itself. While a workspace is untrusted, Kiro does not load its custom agents, steering, MCP configuration, skills or workflow files; asks before every shell command (even if a rule allows it), every MCP tool call and every Power activation (even with `autoApprove`); and refuses writes to `~/.kiro/memories/` and the session store. Admin rules still apply.
@@ -81,9 +83,9 @@ Guidance: trust only repositories from your organization's Git server after revi
 | `agent-hooks/audit-logger.sh` | PostToolUse: appends a hash-chained JSONL record to `${KIRO_AUDIT_LOG:-$HOME/.kiro/audit/kiro-hooks.jsonl}` | Same |
 | `agent-hooks/hooks/banking-guards.json` | v1 hook file that wires the scripts (IDE 1.0+, CLI V3) | `~/.kiro/hooks/` (global) or `.kiro/hooks/` (workspace) |
 | `agent-hooks/banking-secure.agent.json` | Agent with `permissions.rules` and CLI 2.x embedded hooks | `~/.kiro/agents/banking-secure.json` |
-| `agent-hooks/SHA256SUMS` | Pinned hashes of the four scripts | Verified by the MDM scripts before deployment |
+| `agent-hooks/SHA256SUMS` | Pinned hashes of the four bash scripts, the three PowerShell guards (`agent-hooks/windows/`) and the Windows hook file | Verified by the MDM scripts before deployment |
 
-The shipped JSON references `/opt/kiro/hooks/<script>.sh`. `mdm/lockdown-linux.sh --hooks` deploys the scripts there (root-owned, 0755) after verifying `SHA256SUMS`; `mdm/lockdown-macos.sh` deploys them to `/Library/Application Support/Kiro/hooks` and rewrites the path in the copies it installs. On Windows the scripts need Git Bash or WSL; managed-settings is the primary control there.
+The shipped JSON references `/opt/kiro/hooks/<script>.sh`. `mdm/lockdown-linux.sh --hooks` deploys the scripts there (root-owned, 0755) after verifying `SHA256SUMS`; `mdm/lockdown-macos.sh` deploys them to `/Library/Application Support/Kiro/hooks` and rewrites the path in the copies it installs. On Windows, `mdm/lockdown-windows.ps1 -DeployHooks -InstallUser` deploys the PowerShell guards (`agent-hooks/windows/*.ps1`, no bash or `jq` needed) to `C:\ProgramData\Kiro\hooks` and the hook file `banking-guards.windows.json` to every profile; the bash scripts still need Git Bash or WSL there. Kiro documents global hooks for CLI V3; whether Kiro IDE loads them on Windows is a pilot item, so `managed-settings.json` stays the primary control.
 
 **Exit-code contract.** Hook commands receive the event JSON on STDIN (`hook_event_name`, `cwd`, `session_id`, `tool_name`, `tool_input`; PostToolUse adds `tool_response`). For PreToolUse, UserPromptSubmit and PreTaskExec, **exit 2 blocks** and STDERR is returned to the model. According to the Hook triggers page (2026-09-30), any other non-zero exit is treated as an **error, not a block**: execution proceeds and STDERR is shown as a warning.
 
@@ -152,7 +154,7 @@ These protect against a prompt-injected agent, not against the developer, who ca
 - Adversarial: `bash security-tests/chaos/run-chaos.sh --hooks-only` and `run-chaos-hardened.sh --hooks-only` feed crafted events to the shipped hooks without root or system changes. The full runs need a throwaway Linux VM and `CHAOS_ALLOW_SYSTEM_CHANGES=1`. They exercise hook-level and OS-level controls only and do not drive a Kiro client.
 - Pilot: restart Kiro, ask the agent to run a denied command (for example `git push --force`) and confirm that the denial names "administration"; sign out and confirm that only the permitted sign-in method is offered.
 
-Results for the current hooks, MDM scripts and chaos harness (disposable EC2 instances, 2026-10-10) are in [`aws-integration-test-evidence.md`](aws-integration-test-evidence.md). They do not include a live Kiro session, because the end-to-end prompts were skipped without an API key. Historical results ([`chaos-pentest-evidence.md`](chaos-pentest-evidence.md), [`mdm-test-evidence.md`](mdm-test-evidence.md)) predate this model; read their dated notes.
+Results for the current hooks, MDM scripts and chaos harness (disposable EC2 instances, 2026-11-19; the PowerShell guards as unit tests on Windows Server 2022) are in [`aws-integration-test-evidence.md`](aws-integration-test-evidence.md). They do not include a live Kiro session, because the end-to-end prompts were skipped without an API key. Historical results ([`chaos-pentest-evidence.md`](chaos-pentest-evidence.md), [`mdm-test-evidence.md`](mdm-test-evidence.md)) predate this model; read their dated notes.
 
 ## References
 

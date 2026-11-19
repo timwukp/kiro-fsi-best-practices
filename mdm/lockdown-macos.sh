@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # lockdown-macos.sh - Reference MDM job (Jamf Pro / Kandji / Intune) for macOS Kiro clients
-# (Kiro IDE 1.x, Kiro CLI 2.x). MAS TRM 9.1 (access), 11.1 (data), 11.3 (system security),
-# 12.2 (monitoring). Last verified against kiro.dev docs: 2026-10-08.
+# (Kiro IDE 1.x, Kiro CLI 2.25+ and 3.x). MAS TRM 9.1 (access), 11.1 (data), 11.3 (system security),
+# 12.2 (monitoring). Last verified against kiro.dev docs: 2026-10-08; settings keys (auth_portal_url)
+# re-checked 2026-11-19.
 #
 # PRIMARY CONTROL (always):
 #   Deploys the admin policy file to the OFFICIAL Kiro path
@@ -207,7 +208,7 @@ def caps: ["fs_read","fs_write","shell","web_fetch","web_search","mcp","subagent
            "context","diagnostics","sandbox_network","all","builtin","filesystem","signin_method"];
 def signin_values: ["*","idc","external_idp","builder_id","google","github","social"];
 def setting_keys: ["idc_start_url","idc_region","external_idp_domain","external_idp_start_url",
-                   "external_idp_region","signin_help_url"];
+                   "external_idp_region","signin_help_url","auth_portal_url"];
 if type != "object" then err("top level must be a JSON object")
 else
   ( (keys - ["rules","settings"])[] | err("unknown top-level field \"" + . + "\" (Kiro rejects the whole file)") ),
@@ -241,10 +242,12 @@ else
       if (.settings | type) != "object" then err("\"settings\" must be an object")
       else
         ( .settings | to_entries[] |
-          if (.key | member(setting_keys) | not) then warn("settings.\(.key): unknown key (Kiro ignores it)")
+          if (.key | member(setting_keys) | not) then warn("settings.\(.key): not a settings key this script knows (Kiro ignores keys it does not know)")
           elif (.value | type) != "string" then err("settings.\(.key) must be a string")
           elif .key == "signin_help_url" and ((.value | test("^https://")) | not) then err("settings.signin_help_url must be an https:// URL")
-          elif .key == "signin_help_url" and ((.value | length) > 2048) then err("settings.signin_help_url exceeds 2048 characters")
+          elif .key == "signin_help_url" and ((.value | utf8bytelength) > 2048) then err("settings.signin_help_url exceeds 2048 bytes")
+          elif .key == "auth_portal_url" and ((.value | test("^https://[^/?#@]+(/[^?#]*)?$")) | not) then err("settings.auth_portal_url must be an https:// URL without credentials, query or fragment (Kiro CLI 3.5.0+ sends users to the default portal on an invalid value)")
+          elif .key == "auth_portal_url" and (((.value | utf8bytelength) > 2048) or (.value | explode | any(. < 32 or . == 127))) then err("settings.auth_portal_url exceeds 2048 bytes or contains control characters")
           elif (.key | test("_url$")) and ((.value | test("^https://")) | not) then warn("settings.\(.key) is not an https:// URL")
           else empty end ),
         ( [.settings[] | strings | select(test("REPLACE|CHANGE-?ME|xxxx|example\\.|my-org|[<>]"; "i"))]

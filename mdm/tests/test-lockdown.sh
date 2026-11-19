@@ -80,6 +80,8 @@ if [ -f "$BANK" ]; then
   expect 2 "--strict refuses the shipped placeholders (d-xxxxxxxxxx, example.com)" --dry-run --strict
   jq '.settings = {idc_start_url:"https://d-1234567890.awsapps.com/start", idc_region:"ap-southeast-1", signin_help_url:"https://it.bank.test/kiro"}' "$BANK" > "$W/real.json"
   expect 0 "--strict accepts the same policy with real values" --dry-run --strict --settings "$W/real.json"
+  jq '.settings.auth_portal_url = "https://signin.bank.test/kiro"' "$W/real.json" > "$W/portal.json"
+  expect 0 "--strict accepts a valid auth_portal_url (a documented key since Kiro CLI 3.5.0)" --dry-run --strict --settings "$W/portal.json"
 else
   skip "managed-settings/managed-settings.banking.json not present"
 fi
@@ -99,6 +101,10 @@ neg 'unknown rule field refused'        '{"rules":[{"capability":"shell","match"
 neg 'missing effect refused'            '{"rules":[{"capability":"shell","match":["sudo *"]}]}'
 neg 'non-array match refused'           '{"rules":[{"capability":"shell","match":"sudo *","effect":"deny"}]}'
 neg 'http signin_help_url refused'      '{"rules":[],"settings":{"signin_help_url":"http://it.bank.test/help"}}'
+neg 'http auth_portal_url refused'      '{"rules":[],"settings":{"auth_portal_url":"http://signin.bank.test"}}'
+neg 'auth_portal_url with a query refused' '{"rules":[],"settings":{"auth_portal_url":"https://signin.bank.test/kiro?tenant=1"}}'
+neg 'auth_portal_url with credentials refused' '{"rules":[],"settings":{"auth_portal_url":"https://user@signin.bank.test"}}'
+neg 'non-string auth_portal_url refused' '{"rules":[],"settings":{"auth_portal_url":true}}'
 neg 'more than 16 sign-in entries refused' '{"rules":[{"capability":"signin_method","match":["*","idc","idc","idc","idc","idc","idc","idc","idc","idc","idc","idc","idc","idc","idc","idc"],"exclude":["idc"],"effect":"deny"}]}'
 printf '\357\273\277{"rules":[]}' > "$W/bom.json"
 expect 2 "UTF-8 BOM refused" --dry-run --settings "$W/bom.json"
