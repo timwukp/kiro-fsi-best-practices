@@ -11,16 +11,16 @@ These files are local copies of Kiro platform documentation, included for offlin
 | [mcp-servers.md](mcp-servers.md) | https://kiro.dev/docs/mcp/servers/ | 2026-02-25 |
 | [mcp-usage.md](mcp-usage.md) | https://kiro.dev/docs/mcp/usage/ | 2026-10-08 |
 | [privacy-and-security.md](privacy-and-security.md) | https://kiro.dev/docs/privacy-and-security/ (data protection, firewalls, VPC endpoints, compliance) | 2026-10-08 |
-| [permissions-and-managed-settings.md](permissions-and-managed-settings.md) † | https://kiro.dev/docs/permissions/ + https://kiro.dev/docs/enterprise/governance/permissions/ + https://kiro.dev/docs/enterprise/governance/sign-in/ + https://kiro.dev/docs/hooks/ + https://kiro.dev/docs/custom-agents/ | 2026-10-08 (applicability and minimum versions: 2026-11-19) |
+| [permissions-and-managed-settings.md](permissions-and-managed-settings.md) † | https://kiro.dev/docs/permissions/ + https://kiro.dev/docs/enterprise/governance/permissions/ + https://kiro.dev/docs/enterprise/governance/sign-in/ + https://kiro.dev/docs/hooks/ + https://kiro.dev/docs/custom-agents/ | 2026-10-08 (applicability and minimum versions: 2026-11-19; Kiro CLI measurements on Windows: 2026-11-19 and 2026-11-20) |
 | [powers.md](powers.md) | https://kiro.dev/blog/introducing-powers/ | 2026-02-25 |
 | [skills-cli.md](skills-cli.md) | https://kiro.dev/docs/cli/skills/ | 2026-02-25 |
 | [skills-ide.md](skills-ide.md) | https://kiro.dev/docs/skills/ | 2026-02-25 |
 | [anthropic-skills-reference.md](anthropic-skills-reference.md) | https://github.com/anthropics/skills | 2026-02-25 |
-| [security-governance-features.md](security-governance-features.md) † | https://kiro.dev/changelog/ + https://kiro.dev/changelog/cli/ + https://kiro.dev/docs/enterprise/enterprise-management/ | 2026-11-19 |
-| [agent-runtime-governance.md](agent-runtime-governance.md) ‡ | Original authored guidance (this repo) | 2026-10-08 (version and Enterprise Management notes: 2026-11-19) |
-| [mdm-endpoint-enforcement.md](mdm-endpoint-enforcement.md) ‡ | Original authored guidance (this repo) | 2026-11-19 |
-| [intune-deployment.md](intune-deployment.md) ‡ | Original authored guidance (this repo): Windows runbook for Microsoft Intune (Win32 apps, Remediations, managed updates, per-user hooks and steering, pilot checklist) | 2026-11-19 |
-| [aws-integration-test-evidence.md](aws-integration-test-evidence.md) ‡ | Original authored guidance (this repo): sanitized results of `security-tests/aws-integration/`, with the test method, the runs and a coverage table | 2026-11-19 (Windows / Intune and Linux runners); 2026-10-10 (full run with CDK deployment) |
+| [security-governance-features.md](security-governance-features.md) † | https://kiro.dev/changelog/ + https://kiro.dev/changelog/cli/ + https://kiro.dev/docs/enterprise/enterprise-management/ | 2026-11-19; Windows measurements with Kiro IDE and Kiro CLI: 2026-11-19 and 2026-11-20 |
+| [agent-runtime-governance.md](agent-runtime-governance.md) ‡ | Original authored guidance (this repo) | 2026-10-08 (version and Enterprise Management notes: 2026-11-19; Windows measurements with Kiro IDE and Kiro CLI: 2026-11-19 and 2026-11-20) |
+| [mdm-endpoint-enforcement.md](mdm-endpoint-enforcement.md) ‡ | Original authored guidance (this repo) | 2026-11-19; Windows measurements with Kiro IDE and Kiro CLI: 2026-11-19 and 2026-11-20 |
+| [intune-deployment.md](intune-deployment.md) ‡ | Original authored guidance (this repo): Windows runbook for Microsoft Intune (Win32 apps, Remediations, managed updates, per-user hooks and steering, pilot checklist) | 2026-11-19; Windows measurements with Kiro IDE and Kiro CLI: 2026-11-19 and 2026-11-20 |
+| [aws-integration-test-evidence.md](aws-integration-test-evidence.md) ‡ | Original authored guidance (this repo): sanitized results of `security-tests/aws-integration/`, with the test method, the runs and a coverage table | 2026-11-19 and 2026-11-20 (Windows 11, Kiro IDE, Kiro CLI); 2026-11-19 (Windows / Intune and Linux runners); 2026-10-10 (full run with CDK deployment) |
 | [mdm-test-evidence.md](mdm-test-evidence.md) ‡ | Original authored guidance (this repo) | 2026-06-04 (historical; notes added 2026-10-08, 2026-10-10 and 2026-11-19) |
 | [chaos-pentest-evidence.md](chaos-pentest-evidence.md) ‡ | Original authored guidance (this repo) | 2026-06-05 (historical; notes added 2026-10-08, 2026-10-10 and 2026-11-19) |
 
@@ -36,7 +36,7 @@ The reference snapshots above describe Kiro behaviour. The deployable files that
 | [`../managed-settings/`](../managed-settings/) | Admin policy `managed-settings.json` (Option A: IAM Identity Center; Option B: external IdP), user `permissions.yaml` template, MCP registry example, deployment paths and validation commands |
 | [`../agent-hooks/`](../agent-hooks/) | Hook scripts and the `banking-secure` custom agent |
 | [`../mdm/`](../mdm/) | MDM / endpoint scripts that deploy the policy to the official OS paths; Intune detection and remediation wrappers in `mdm/intune/` |
-| [`../security-tests/`](../security-tests/) | Chaos harness (`chaos/`), the sandbox-account integration test (`aws-integration/`) and the Windows client validation kit (`windows-client/`: W2, issue #43; not yet run on a Windows 11 client) |
+| [`../security-tests/`](../security-tests/) | Chaos harness (`chaos/`), the sandbox-account integration test (`aws-integration/`, environment in [`architecture.md`](../security-tests/aws-integration/architecture.md)) and the Windows client validation kit (`windows-client/`: W2, issue #43; run on a Windows 11 26H2 VM on 2026-11-19 and 2026-11-20) |
 
 ## Maintenance
 

@@ -30,7 +30,7 @@ Use these before relying on per-user configuration. Settings are in Kiro console
 - **Scope:** IAM Identity Center and API-key users, in the IDE and CLI. Builder ID and social sign-in users are not subject to organization MCP controls, which is another reason to restrict sign-in to the corporate method with `managed-settings.json` (see [`../managed-settings/`](../managed-settings/)). MCP governance and the registry do not apply to Kiro Web; keep Cloud Sessions off.
 - **Hosting the registry:** HTTPS with a certificate from a trusted CA (no self-signed certificates); the URL may be private to the corporate network.
 - **Client-side enforcement:** both the toggle and the registry "can be circumvented by users, e.g., via administrative access to their local machine". Developers should not have local admin rights.
-- **Admin permission rule (optional):** `{"capability": "mcp", "effect": "ask"}` in `managed-settings.json` forces a prompt for every MCP tool call, even if users or `autoApprove` allow it. `{"capability": "mcp", "match": ["<server>/<tool>"], "effect": "deny"}` blocks individual tools.
+- **Admin permission rule (optional):** `{"capability": "mcp", "effect": "ask"}` in `managed-settings.json` forces a prompt for every MCP tool call, even if users or `autoApprove` allow it (Kiro's governance page; in headless Kiro CLI 3.5.0 runs `--trust-all-tools` approved a shell command under an admin `ask`, finding F2 in [Measured limits on Windows](../managed-settings/README.md#measured-limits-on-windows-kiro-cli-350-2026-11-20); not measured for MCP; use `deny` where it must hold). `{"capability": "mcp", "match": ["<server>/<tool>"], "effect": "deny"}` blocks individual tools.
 
 ## Untrusted workspaces
 

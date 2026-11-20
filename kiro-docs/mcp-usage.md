@@ -87,7 +87,7 @@ To avoid repeated prompts for tools you trust, add tool names to the `autoApprov
 ```
 
 - **Naming:** the property is `autoApprove`. This page shows prefixed tool names (`mcp_<server>_<tool>`), while the configuration page describes the entries as plain "tool names". Check the name shown in the MCP panel (see [mcp-configuration.md](mcp-configuration.md)).
-- **Permission rules win:** `autoApprove` only removes Kiro's own prompt. An `mcp` rule with `ask` or `deny` in `managed-settings.json` or any `permissions.yaml` still applies (deny > ask > allow). Permission rules for MCP use `<server>/<tool>` patterns, for example `aws-docs/*`.
+- **Permission rules win:** `autoApprove` only removes Kiro's own prompt. An `mcp` rule with `ask` or `deny` in `managed-settings.json` or any `permissions.yaml` still applies (deny > ask > allow). Exception measured for shell commands: in headless Kiro CLI 3.5.0 runs `--trust-all-tools` approved a command under an admin `ask` (finding F2, [Measured limits on Windows](../managed-settings/README.md#measured-limits-on-windows-kiro-cli-350-2026-11-20); not measured for MCP), so use `deny` where it must hold. Permission rules for MCP use `<server>/<tool>` patterns, for example `aws-docs/*`.
 - **Untrusted workspaces:** every MCP tool call asks for approval, including tools listed in `autoApprove`, and a call retried after the server asks you to sign in or open a URL asks again.
 - **Approval freshness:** before any MCP tool runs, Kiro checks that its approval is still current, so an approval withdrawn or changed while the call was waiting is not applied.
 

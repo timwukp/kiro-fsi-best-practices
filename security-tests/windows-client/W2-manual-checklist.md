@@ -8,9 +8,20 @@ The checks of GitHub issue #43 that need a signed-in Kiro window. The script can
 >
 > **Stop if the device already carries an organisation policy.** This checklist assumes that the policy on the device was deployed by the kit (`Invoke-W2Checks.ps1 -InstallPolicy`, README step 7) on a device that passed the clean-device check of README step 2. If `C:\ProgramData\Kiro\managed-settings.json`, the staged sources, the hook files or `HKLM\SOFTWARE\Policies\Kiro` were on the device before the kit ran, do not continue: `-InstallPolicy` and section W2.6 replace that policy with the sample from this repository, and the clean-up removes it.
 >
-> **Status (2026-11-19): no step of this checklist has been carried out yet.** The kit has not been run on a Windows 11 client (see the status note in the [README](README.md)).
+> **Status (2026-11-20): carried out on 2026-11-19 and 2026-11-20** on a Windows 11 Enterprise **Evaluation** 26H2 virtual machine (build 26300.9457, x64; Hyper-V on an EC2 host with nested virtualization), with Kiro IDE 1.4.236 (system setup) and a local standard user at the console. Intune itself was not used (no tenant). Each chat case was run once with the model. The results are on the [evidence page](../../kiro-docs/aws-integration-test-evidence.md); the kit runs are in the status note of the [README](README.md). The sections below keep their result blocks empty for the next run and add what was measured under **Expected result**.
 >
-> The PowerShell snippets in W2.5, W2.6 and W2.9 were written without a Windows machine and have not been executed. Read them before you run them.
+> | Section | Result in Kiro IDE 1.4.236 on Windows 11 26H2 |
+> |---------|-----------------------------------------------|
+> | W2.1 | The standard user started Kiro and signed in. `kiro` is on the machine PATH (`C:\Program Files\Kiro\bin`, from `W2.1.path`). A UAC prompt and the start-up notifications were not recorded |
+> | W2.3 | Not run |
+> | W2.4 | PASS: no update offered. Help > About shows "Version: 1.4.236 (system setup)" and no text about updates; the Command Palette has no "Check for Updates" command |
+> | W2.5 | PASS: `git push --force origin main` and rows a to d refused, "Blocked by administration permission policy"; row e prompted and was rejected; row f followed Kiro's default (a prompt). Row g not run. Sign-in: see the measured bullets of W2.5 |
+> | W2.6 | Variant A (BOM) only: tools fail closed, sign-in fails open (all four methods offered). The warning names neither the file nor the cause. Variants B and C not run |
+> | W2.7 | Kiro IDE lists and runs the global hooks from `%USERPROFILE%\.kiro\hooks` (`W2.7.probe` PASS, "Kiro IDE [Kiro.exe]=2"). Kiro CLI 3.5.0 also, in headless runs |
+> | W2.8 | Hook commands start through `cmd.exe`. Exit code 2 blocks the tool call. `pii-guard` blocked the write of the test NRIC |
+> | W2.9 | Part A PASS: the marker was answered exactly. Part B not run in Kiro IDE |
+>
+> The PowerShell snippets of this page were not all run as written. The standard user ran the rename of W2.5 (both `Test-Path` lines printed `False`). Variant A of W2.6 was planted from the host by the lab harness, and the policy was restored with `-InstallPolicy -Wrappers -TamperTest`. The variants B and C and part B of W2.9 were not run. Read the snippets before you run them.
 
 ## How to use this checklist
 
@@ -61,6 +72,7 @@ Standard user is not a local administrator (whoami /groups checked: yes / no):
 - Unverified: Kiro starts for the standard user without a User Account Control prompt. Kiro's documentation names the system-wide installer ([IDE 1.4.62 changelog](https://kiro.dev/changelog/ide/1-4-62/), [managed updates](https://kiro.dev/docs/enterprise/managed-updates/)) but does not describe its install folder, shortcuts or PATH entry.
 - Documented, as a negative: the message that starts "Updates are disabled because you are running the user-scope installation" belongs to the per-user build run as Administrator ([IDE troubleshooting](https://kiro.dev/docs/ide/troubleshooting/)). It must not appear here.
 - Unverified: whether `kiro` is on PATH.
+- Measured on Windows 11 26H2 with Kiro IDE 1.4.236 (2026-11-19): the standard user started Kiro and signed in. The installer put `C:\Program Files\Kiro\bin` on the machine PATH (`kiro` and `kiro.cmd`) and created an all-users Start Menu shortcut (`W2.1.path`, `W2.1.start-menu`). Not recorded: whether a UAC prompt or a notification appeared at start.
 
 **Result.**
 
@@ -96,6 +108,7 @@ Notes:
 - Documented: with `UpdateMode` = `none` Kiro skips every update check, whatever `UpdateUrl` says, and it reads the value at startup ([managed updates](https://kiro.dev/docs/enterprise/managed-updates/)). So no update is offered.
 - Documented for another case only: Help > About shows updates as disabled with a `MissingConfiguration` status when the update URL or the commit hash is missing (same page). Kiro describes that view for `UpdateUrl`, not for `UpdateMode`.
 - Unverified: what Help > About and `Kiro: Check for Updates` show with `UpdateMode=none`. Record the text.
+- Measured on Windows 11 26H2 with Kiro IDE 1.4.236 (2026-11-20): Help > About shows "Version: 1.4.236 (system setup)" and no text about updates. The Command Palette offers no "Check for Updates" command at all (only "Developer: Show Update Info" and an extensions auto-update command). Control: with `UpdateMode` removed from both registry views and Kiro restarted, "Check for Updates" was offered and reported "There are currently no updates available." So `UpdateMode=none` removes the manual update check, and Kiro shows the user no hint that updates are managed.
 
 **Result.**
 
@@ -124,7 +137,7 @@ Notes:
 - The test workspace is open.
 - **The hook guards are switched off, and the probes are not installed yet** (see below).
 
-**Switch the hook guards off (standard user, Kiro closed).** `-InstallPolicy` also wrote `%USERPROFILE%\.kiro\hooks\banking-guards.windows.json`. Its guards block some of the commands used here: `git-guard` blocks the force push of step 3. Whether Kiro IDE loads that file is the open question of W2.7, and whether a hook runs before the permission check is not documented. With the guards active, a refusal could not be attributed to the policy. The file is the user's own copy, so rename it for sections W2.5 and W2.6:
+**Switch the hook guards off (standard user, Kiro closed).** `-InstallPolicy` also wrote `%USERPROFILE%\.kiro\hooks\banking-guards.windows.json`. Its guards block some of the commands used here: `git-guard` blocks the force push of step 3. Kiro IDE 1.4.236 loads that file (W2.7, measured on Windows 11 26H2 on 2026-11-20), and whether a hook runs before the permission check is not documented. With the guards active, a refusal could not be attributed to the policy. The file is the user's own copy, so rename it for sections W2.5 and W2.6:
 
 ```powershell
 $g = "$env:USERPROFILE\.kiro\hooks\banking-guards.windows.json"
@@ -135,8 +148,8 @@ Test-Path -LiteralPath "$env:USERPROFILE\.kiro\hooks\w2-probe.json"   # must pri
 ```
 
 - If the second `Test-Path` prints `True`, the probes are installed: run `-RemoveProbes` (README step 13) first, and install them again after W2.6.
-- The MDM script sets no owner or ACL on the per-user hook file, so the standard user is expected to be able to rename it *(verify)*. If the rename is refused, record the error (it belongs to W2.9, part B) and rename the file from the elevated window.
-- Kiro documents hook definitions as `.kiro/hooks/*.json` ([hook types](https://kiro.dev/docs/hooks/types/)), so a file with another extension is not expected to load *(verify in step 1)*.
+- The MDM script sets no owner or ACL on the per-user hook file, so the standard user can rename it: measured on Windows 11 26H2 on 2026-11-19, where the standard user renamed it and both `Test-Path` lines printed `False`. If the rename is refused on your device, record the error (it belongs to W2.9, part B) and rename the file from the elevated window.
+- Kiro documents hook definitions as `.kiro/hooks/*.json` ([hook types](https://kiro.dev/docs/hooks/types/)), so a file with another extension is not loaded: with the file renamed to `.json.off`, the Agent Hooks section of Kiro IDE 1.4.236 listed no hooks (measured on Windows 11 26H2 on 2026-11-19). Check it again in step 1.
 - While the file is renamed the device is in drift: `lockdown-windows.ps1 -Check` reports the missing hook file, so `W2.10.*.detect-compliant` would FAIL. Do not run `-Wrappers` between this block and the end of W2.6. A run of `-InstallPolicy` or of the remediation wrapper writes the file again; repeat the block after such a run.
 
 **Steps.**
@@ -163,9 +176,17 @@ Rows a to f come from [`managed-settings/tests/shell-vectors.tsv`](../../managed
 - Documented: no policy warning at start-up. Kiro notifies the user when the policy file could not be loaded ([permission policies](https://kiro.dev/docs/enterprise/governance/permissions/), "Verifying the policy").
 - Documented: the denied command is refused, and the denial shows the rule source `administration`. The user sees that the restriction is managed by the organisation and that their own permission settings cannot override it (same page).
 - Documented: the sign-in screen offers only the permitted methods, with the Identity Center fields prefilled, and the IDE shows the help link below the sign-in buttons ([sign-in controls](https://kiro.dev/docs/enterprise/governance/sign-in/), "What users see"). The controls apply to Kiro IDE 1.2 and later and take effect at the next sign-in.
-- Documented: `C:\ProgramData\Kiro\managed-settings.json` is the Windows path, read by the IDE and the CLI (both pages). This repository has not yet seen Kiro IDE do it on Windows.
+- Documented: `C:\ProgramData\Kiro\managed-settings.json` is the Windows path, read by the IDE and the CLI (both pages). Measured: Kiro IDE 1.4.236 on Windows 11 26H2 reads and enforces it (2026-11-19 and 2026-11-20).
 - Unverified: rows a to d are denied. The patterns are in the policy, but Kiro does not document case handling or alias handling for shell rules ([permissions](https://kiro.dev/docs/permissions/) describes the pattern syntax only). Row g is expected to be unmatched if matching is case-sensitive.
 - Unverified: row e prompts and row f is left to Kiro's defaults.
+- Measured on Windows 11 26H2 with Kiro IDE 1.4.236 (2026-11-19 and 2026-11-20), hook guards off:
+  - Step 3: the tool call shows "Blocked by administration permission policy"; the output names the deny rule and the source `C:\ProgramData\Kiro\managed-settings.json`. PASS.
+  - Rows a to d: refused by the managed deny rule (rule 13, and rule 10 for row c). For row b the model first declined in the same chat without a tool call (inconclusive). Rows b to f were then sent in new chats that asked the agent to try the command once; each gave one tool call.
+  - Row e: the prompt "Your approval is required to continue" with Allow / Deny / Always deny; rejected, nothing ran. Row f: Kiro's default (Supervised mode) showed the same prompt, so the prompt alone does not show which rule asked.
+  - Row g: not run in Kiro IDE (still open). Kiro CLI 3.5.0 ran the same spelling past rule 13 and fetched the page (finding F1: Windows Server 2022 on 2026-11-19, Windows 11 26H2 on 2026-11-20), also with the hook guards on.
+  - Sign-in: with a policy that permits only `external_idp`, Kiro showed the **Need help signing in?** link and the browser page offered one option, "Your organization" (no sign-in completed: placeholder domain). With the repository policy (`idc` only) the user signed in with IAM Identity Center, after entering their own start URL, because the one in the repository is a placeholder. Whether the fields were prefilled was not recorded.
+- **Limit of shell deny rules on Windows (F1).** Kiro CLI 3.5.0 matches shell rules case-sensitively, and PowerShell accepts every casing of a command. A casing that the policy does not list runs, and an admin cannot list every casing. On Windows a shell deny rule is a guardrail against the usual spellings, not a boundary. Network egress needs a network control (proxy or DNS Firewall allowlist). Guard hooks that match case-insensitively back up only what they cover: `destructive-fs-guard` blocked `REMOVE-ITEM .git -RECURSE -FORCE`, but no guard covers network commands. Reported to Kiro on GitHub (kirodotdev/Kiro).
+- **Admin `ask` in headless runs (F2).** Row e shows an admin `ask` holding in an interactive IDE chat. In headless Kiro CLI 3.5.0 runs, `--trust-all-tools` approved a command under an admin `ask` rule (rule 21, `Remove-Item <file> -Force`) without asking anybody; without the flag the command was refused. Kiro's governance page says an admin `ask` always prompts, and its permissions page says the trust-all option trusts everything the rules do not deny; the measured behaviour follows the second page. An admin `deny` held against `--trust-all-tools` for the listed spelling, but the capitals spelling ran (F1). Measured on Windows Server 2022 (2026-11-19) and Windows 11 26H2 (2026-11-20); reported to Kiro on GitHub (kirodotdev/Kiro).
 
 **Result.**
 
@@ -200,7 +221,7 @@ Notes:
 
 **Preconditions.** W2.5 is done and passed, so you know what the valid state looks like. The hook guards are still switched off and the probes are not installed (the block in W2.5). You have the elevated window. Kiro is closed before each variant is planted.
 
-**Prepare (elevated window, once).** Back up the deployed policy and remove the Users DENY entry so that an administrator can write the file:
+**Prepare (elevated window, once).** Back up the deployed policy and remove the Users DENY entry so that an administrator can write the file. The deny entry applies to administrators and to SYSTEM too: their tokens hold Users through Authenticated Users. Every test that writes the policy file needs this step, and the restore below deploys the policy again, which puts the entry back. A harness that skipped it could not write its test files as SYSTEM (phase WK, run 2, Windows 11 26H2, 2026-11-20: "Access to the path ... is denied").
 
 ```powershell
 $Policy = 'C:\ProgramData\Kiro\managed-settings.json'
@@ -279,6 +300,14 @@ Sources: [permission policies](https://kiro.dev/docs/enterprise/governance/permi
 
 Unverified for all variants: the exact wording and place of the warning in Kiro IDE on Windows.
 
+Measured for variant A on Windows 11 26H2 with Kiro IDE 1.4.236 (2026-11-20); variants B and C were not run in Kiro IDE:
+
+- Warning: an error notification "Kiro could not load your permission settings - tool permissions have failed closed, so some tools may be blocked until the permissions file is fixed.", with the button **Open Permissions File**, and a red "Permissions: Failed" item in the status bar. It names neither the file nor the cause, unlike the documented notification. The button opens `C:\ProgramData\Kiro\managed-settings.json` in the editor, where the BOM is not visible.
+- Agent tools: the listing was denied ("the user's permission file(s) failed to parse"), with the parse error, the file path and up to 8,192 characters of the file's content, which go to the model. `git push --force` was denied with the same parse-failure text, not by the administration rule. Fail closed, as documented.
+- Sign-in: all four methods were offered (Google, GitHub, Builder ID, Your organization). Fail open, as documented.
+- The agent's advice: after the denial, the model told the user to fix the file, among other ways by resetting it to `rules: []`, which removes every admin rule. Keep the file admin-only and let the remediation restore it.
+- Kiro CLI 3.5.0 refused every tool call with malformed JSON and with the BOM variant (fail closed; phase WK on Windows Server 2022 on 2026-11-19 and on Windows 11 26H2 on 2026-11-20).
+
 **Result.**
 
 ```text
@@ -330,9 +359,10 @@ Notes:
 
 **Expected result.**
 
-- Documented: Kiro CLI V3 loads global hooks from `~/.kiro/hooks/` ([hooks](https://kiro.dev/docs/hooks/)). So the CLI part should record calls. Kiro does not state that `~` is `%USERPROFILE%` on Windows *(verify)*.
+- Documented: Kiro CLI V3 loads global hooks from `~/.kiro/hooks/` ([hooks](https://kiro.dev/docs/hooks/)). So the CLI part should record calls. Kiro does not state that `~` is `%USERPROFILE%` on Windows, but it is: Kiro CLI 3.5.0 ran the probe from `%USERPROFILE%\.kiro\hooks` in headless V3 runs (`W2.7.probe` PASS, `kiro-cli [kiro-cli.exe]`; Windows Server 2022 on 2026-11-19, Windows 11 26H2 on 2026-11-20). The interactive steps 6 to 8 were not run.
 - Documented: the Pre Tool Use trigger exists in the IDE and in the CLI ([hook types](https://kiro.dev/docs/hooks/types/)), for hooks in a workspace's `.kiro/hooks/`.
 - Unverified: whether Kiro IDE loads the **global** hook file. Either answer is a result. Record it with the control of step 5.
+- Measured on Windows 11 26H2 with Kiro IDE 1.4.236 (2026-11-20): yes. The baseline showed no hook call. After the restart the Agent Hooks section listed four PreToolUse hooks: the three guards of `banking-guards.windows.json` and the probe. The test workspace has no `.kiro\hooks`, so they came from `%USERPROFILE%\.kiro\hooks`. After two tool calls `W2.7.probe` was PASS: "Kiro IDE [Kiro.exe]=2; calls from other parents: 0". The control of step 5 was not needed. Kiro documents global hooks for Kiro CLI V3 only, so re-test after each Kiro IDE update.
 - Note: `W2.7.probe` names the client from the process names in the probe log. Compare it with the parent chains in `W2.8.probe`.
 
 **Result.**
@@ -380,6 +410,11 @@ Notes:
 - Unverified: which shell runs hook commands on Windows. Kiro says only that a command action runs a shell command in the project root ([hooks](https://kiro.dev/docs/hooks/)).
 - Unverified: whether the approval prompt comes before or after the hook.
 - Unverified: all of the above for global hooks in Kiro IDE (see W2.7).
+- Measured on Windows 11 26H2 with Kiro IDE 1.4.236 (2026-11-20), global hooks:
+  - Shell: `cmd.exe`. `W2.8.probe` showed one parent chain, `cmd.exe < Kiro.exe < Kiro.exe < explorer.exe`; the probe ran in Windows PowerShell (Desktop) 5.1.26100.9444, 64-bit. Kiro CLI 3.5.0 also starts hook commands through `cmd.exe` (`cmd.exe < node.exe < kiro-cli.exe`, Windows Server 2022 and Windows 11 26H2).
+  - Step 2: blocked. The chat showed the four hooks running, and Kiro answered that the PreToolUse hook `w2-probe` blocked the command with the message "BLOCKED - W2 block test". So exit code 2 from a global hook blocks the tool call, and its STDERR text reaches the model. No approval prompt appeared: the hook blocked before Kiro asked. A `-ReadProbes` run after this step was not recorded.
+  - Step 4: blocked. `pii-guard` and `w2-probe` ran (both match every tool; the git and destructive-filesystem guards match shell only), `pii-guard` blocked the write of the test NRIC, and `customer.txt` was not created. The agent then offered to change or exempt the `pii-guard` hook in `.kiro/hooks`: the hook file is in the user's profile and the user can edit it, so must-hold rules belong in the admin policy.
+  - Kiro CLI 3.5.0, headless: a PreToolUse hook that exits 2 blocked the call, and `pii-guard.ps1` blocked a write of the test NRIC (Windows Server 2022 on 2026-11-19, Windows 11 26H2 on 2026-11-20).
 
 **Result.**
 
@@ -455,8 +490,8 @@ Notes:
 **Expected result.**
 
 - Documented: global steering files live in `~/.kiro/steering/` and apply to all workspaces, in the IDE and the CLI; a steering file is always included unless its front matter says otherwise; team steering can be pushed to users' PCs with MDM ([steering](https://kiro.dev/docs/steering/)). So the file should be listed and the marker should be answered for the current user.
-- Unverified: that `~` is `%USERPROFILE%` on Windows.
-- Unverified: that a profile created after deployment receives `.kiro\steering\` and `.kiro\hooks\` from `C:\Users\Default`, and who owns those files (open question 10 of the runbook).
+- Unverified: that `~` is `%USERPROFILE%` on Windows. Measured: it is. Kiro IDE 1.4.236 on Windows 11 26H2 (2026-11-20) listed `w2-steering-probe` under Global in the Steering section and, with "Included Steering" and no tool call, answered exactly with the marker, which exists only in `%USERPROFILE%\.kiro\steering\w2-steering-probe.md`. Kiro CLI 3.5.0 answered with the marker too (headless, Windows Server 2022 and Windows 11 26H2).
+- Unverified: that a profile created after deployment receives `.kiro\steering\` and `.kiro\hooks\` from `C:\Users\Default`, and who owns those files (open question 10 of the runbook). Measured in part: in phase WK (Kiro CLI 3.5.0; Windows Server 2022 on 2026-11-19, Windows 11 26H2 on 2026-11-20) a standard user created after the deployment got `.kiro\hooks\banking-guards.windows.json` from `C:\Users\Default`, and could neither change nor delete the policy file. Not measured: the steering file from `C:\Users\Default`, the owner of the copied files, and part B in Kiro IDE.
 - Note: the answer comes from the model. If the file is listed but the answer is not exactly the marker, ask once more in a new chat and record both answers.
 
 **Result.**
@@ -509,6 +544,7 @@ This section comes last because it needs a device **without Kiro**: a fresh devi
 - Documented, related: three Windows install types exist, `-system` (the default), `-user` and `-archive` ([managed updates](https://kiro.dev/docs/enterprise/managed-updates/)).
 - Documented, related: settings, extensions and the sign-in state survive a reinstall ([installation](https://kiro.dev/docs/getting-started/installation/)). Kiro says this about uninstalling and reinstalling to change version, not about switching builds.
 - Unverified: the per-user build registers under HKCU and installs under `%LOCALAPPDATA%\Programs` (the locations the script looks at); both builds can be installed side by side; which one PATH and the Start menu point to.
+- Measured in part, for the per-user build 1.4.236 run as SYSTEM on Windows Server 2022 (2026-11-19), not installed by a user: it installed into SYSTEM's own profile (`C:\Windows\system32\config\systemprofile\AppData\Local\Programs\Kiro\`), registered `{A2CA08B5-C756-463E-B13D-F051F4F11F0B}_is1` ("Kiro (User)") under `HKU\S-1-5-18` only, added its `bin` folder to SYSTEM's user PATH only, and created no Start menu shortcut. A detection rule on `C:\Program Files\Kiro\Kiro.exe` or on an HKLM Uninstall key finds nothing. This section, with a logged-on user and on Windows 11, is still open.
 
 **Result.**
 
@@ -533,7 +569,7 @@ Notes:
 
 ## Results summary
 
-Paste this table into the new W2 section of [`kiro-docs/aws-integration-test-evidence.md`](../../kiro-docs/aws-integration-test-evidence.md), with the run record from the top of this page. Mask every identifier first. The README section "Where confirmed values go" lists the other documents to update.
+Paste this table into the new W2 section of [`kiro-docs/aws-integration-test-evidence.md`](../../kiro-docs/aws-integration-test-evidence.md), with the run record from the top of this page. Mask every identifier first. The README section "Where confirmed values go" lists the other documents to update. The run of 2026-11-19 and 2026-11-20 is summarised in the status note at the top of this page; the table stays empty for the next run.
 
 | Check | What | Automated (script) | Manual result | Observed value to feed back | Evidence file |
 |-------|------|--------------------|---------------|-----------------------------|---------------|

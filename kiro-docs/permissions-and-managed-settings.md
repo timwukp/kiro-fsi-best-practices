@@ -35,7 +35,7 @@ The capability-based model replaces the IDE 0.x Trusted Commands and Command Den
 
 **Capabilities:** `fs_read`, `fs_write`, `shell`, `web_fetch`, `web_search`, `mcp`, `subagent`, `skill`, `power`, `context`, `diagnostics`, `sandbox_network`. Meta-capabilities: `all`, `builtin` (all built-in tools), `filesystem` (`fs_read` + `fs_write`). `sandbox_network` is not part of `all`.
 
-**Scopes** (all evaluated together, deny-overrides: `deny > ask > allow`; no precedence between scopes, the most restrictive effect wins):
+**Scopes** (all evaluated together, deny-overrides: `deny > ask > allow`; no precedence between scopes, the most restrictive effect wins, except an admin `ask` under `--trust-all-tools` in headless runs, measured, see CLI session overrides below):
 
 | Scope | Location | Effects allowed |
 |-------|----------|-----------------|
@@ -52,6 +52,7 @@ The capability-based model replaces the IDE 0.x Trusted Commands and Command Den
 - `shell`, `web_fetch`, `mcp`: `*` matches any sequence of characters; `**`, `?` and character classes are not supported. MCP patterns are `<server>/<tool>`.
 - Globs only, no regular expressions.
 - Shell commands are parsed first: compound commands (`;`, `&&`, `||`, `|`) are split and each sub-command is evaluated independently.
+- Letter case is not documented for shell patterns (only sign-in method names are documented as case-sensitive). Measured with Kiro CLI 3.5.0 on Windows Server 2022 and Windows 11 (2026-11-19 and 2026-11-20): shell patterns match case-sensitively, while PowerShell runs every casing as the same cmdlet. `INVOKE-WEBREQUEST` in capitals ran past an admin `deny` for `Invoke-WebRequest*` and `invoke-webrequest*`. On Windows, a shell `deny` is therefore a guardrail, not a boundary ([details](../managed-settings/README.md#measured-limits-on-windows-kiro-cli-350-2026-11-20); not tested in Kiro IDE).
 
 **Defaults without any file:** silent `fs_read` on `./**`, common read-only git commands (`git status`, `git log`, `git diff`, `git branch` …), system-info commands (`pwd`, `whoami`, `uname` …) and utility tools; everything else prompts. A `permissions.yaml` adds to these defaults.
 
@@ -61,13 +62,13 @@ The capability-based model replaces the IDE 0.x Trusted Commands and Command Den
 - Always ask (trusted or not; no allow rule removes the prompt): writes to `.git/**`, `.vscode/**`, `**/*.code-workspace`, `.kiroignore`, and the agents, hooks, workflows and powers directories of the workspace `.kiro` and of `~/.kiro`.
 - Ask while the workspace is untrusted: writes to `.kiro/steering`, `.kiro/skills`, `.kiro/extensions` and any undeclared `.kiro` directory.
 
-**Headless:** with no interactive client, every `ask` is treated as `deny`.
+**Headless:** with no interactive client, every `ask` is treated as `deny`, unless the run is started with `--trust-all-tools` (see below).
 
 **IDE autonomy:** `kiroAgent.agentAutonomy` = `Autopilot` (proceed with allowed operations) or `Supervised` (prompt before any action). The permission layer applies after the autonomy decision.
 
 **Interactive approvals:** Allow / Always allow / Deny / Always deny. "Always allow" saves to all workspaces (user file), this workspace (workspace-roots file) or this session. Chained commands are approved sub-command by sub-command.
 
-**CLI session overrides:** `--trust-all-tools` still works as a session-scope override, and V3 adds `/tools trust-all` (CLI 2.24.0) and `/tools untrust <tool>`. These are allow sources and cannot override an admin `deny` or `ask`.
+**CLI session overrides:** `--trust-all-tools` still works as a session-scope override, and V3 adds `/tools trust-all` (CLI 2.24.0) and `/tools untrust <tool>`. These are allow sources and cannot override an admin `deny`. **Conflict between the official pages:** the permission policies page says an admin `ask` forces a prompt even over a user `allow`, and that a preset `allow` never overrides an admin `deny` or `ask`; the permissions page says `--trust-all-tools` and `/tools trust-all` trust every tool action the rules do not deny. Measured with Kiro CLI 3.5.0 in headless runs on Windows Server 2022 and Windows 11 (2026-11-19 and 2026-11-20), the second statement holds: with `--trust-all-tools`, `Remove-Item <file> -Force` under an admin `ask` rule ran and nobody was asked; without the flag it was refused; with the rule changed to `deny` it was refused (for the listed spelling; `REMOVE-ITEM <file> -FORCE` in capitals ran, because shell patterns match case-sensitively). `/tools trust-all` in an interactive session was not measured. Use admin `deny` for anything that must never run, and keep `--trust-all-tools` and `--trust-tools` out of unattended and agent configurations ([details](../managed-settings/README.md#measured-limits-on-windows-kiro-cli-350-2026-11-20)).
 
 **Official example:**
 
