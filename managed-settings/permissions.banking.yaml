@@ -42,7 +42,11 @@
 #     directories, {a,b} and [abc] are supported.
 #   - Globs only, no regular expressions.
 #
-# Headless / non-interactive runs treat every "ask" as "deny".
+# Headless / non-interactive runs treat every "ask" as "deny", unless the run
+# is started with --trust-all-tools, which approves admin "ask" rules
+# (measured with Kiro CLI 3.5.0 on Windows, 2026-11-19 and 2026-11-20; see
+# managed-settings/README.md, "Measured limits on Windows"). Use "deny" for
+# anything that must never run.
 #
 # Do NOT add any of the following here:
 #   - "capability: all" or "capability: shell" without a match list

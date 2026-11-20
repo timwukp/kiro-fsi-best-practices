@@ -52,8 +52,9 @@ What Kiro itself does on Windows (policy enforcement, global hooks, steering, an
 on a supported operating system) can only be checked on a Windows 11 client with Kiro installed. Use the W2 kit for that
 ([`security-tests/windows-client/`](security-tests/windows-client/README.md), issue #43), on a test device
 only. Its automatable part also runs on the Windows Server runner as the opt-in integration-test stage
-`client` (WC). The kit has not yet been run on a Windows 11 client; when you run it, follow its section
-"Where confirmed values go".
+`client` (WC). The kit was run on a Windows 11 Enterprise 26H2 (Evaluation) VM on 2026-11-19 and 2026-11-20; that lab can be
+rebuilt with the opt-in stages `win11host` and `win11:<phase>`. When you run the kit again (for example after a
+Kiro update), follow its section "Where confirmed values go".
 
 If you change a hook script in `agent-hooks/`, regenerate `agent-hooks/SHA256SUMS` in the same
 change as described in [`agent-hooks/README.md`](agent-hooks/README.md) and confirm

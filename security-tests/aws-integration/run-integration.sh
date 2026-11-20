@@ -14,6 +14,19 @@
 #               runner. Downloads the current Kiro IDE system-wide installer and runs the automatable part
 #               of the W2 kit (security-tests/windows-client) as SYSTEM. Windows Server 2022, no signed-in
 #               Kiro client: installer mechanics only. IT_WC_UNINSTALL=1 also runs the uninstall command.
+#   kirowin     OPT-IN, never part of "all": run WK on the Windows runner. Installs Kiro CLI from Kiro's
+#               Windows package and drives it headless as a standard user: admin policy, global hooks,
+#               hook exit code 2, a hook guard, global steering. Windows Server 2022, Kiro CLI only.
+#               The end-to-end part needs a Kiro API key in the SSM SecureString /kiro-fsi-test/kiro-api-key
+#               (without it: install, policy and test user only). IT_WK_UNINSTALL=1 also uninstalls.
+#   kiro        OPT-IN, never part of "all": run the kiro phase (K1, K2) on the LINUX RUNNER, which has
+#               open egress, instead of on the probe behind the DNS Firewall allowlist. K2 needs the
+#               same API key parameter. Use it to run K2 without deploying the CDK stacks.
+#   win11host   OPT-IN: launch the Windows 11 lab host into the harness subnet: an m8i instance with nested
+#               virtualization, Windows Server 2025, Hyper-V. Passwords for its local accounts are generated
+#               into SSM SecureStrings /kiro-fsi-test/win11-* (never printed; removed by "down").
+#   win11:<P>   run phase <P> of win11-lab.ps1 on that host (host, iso, vm, then status, kit-baseline,
+#               kit-install, kit-policy, wk)
 #   deploy      cdk bootstrap (if missing) + offline cdk synth + CloudFormation deploy of all 5 stacks
 #               (env=dev, singleton flags from preflight)
 #   verify      verify-deploy.sh against the deployed stacks (C1)
@@ -27,7 +40,13 @@
 #              IT_WC_UNINSTALL (default unset; 1 = the client stage uninstalls Kiro at its end),
 #              IT_WC_STOP_KIRO (1 = the client stage stops Kiro processes before the install and the uninstall),
 #              IT_WC_INSTALLER_ARGS (replaces ALL default installer switches of the kit, including /LOG;
-#              letters, digits, space and / = ! . : \ _ - only, no quotes).
+#              letters, digits, space and / = ! . : \ _ - only, no quotes),
+#              IT_WK_UNINSTALL (1 = the kirowin stage uninstalls Kiro CLI at its end),
+#              IT_W11_TYPE (default m8i.2xlarge; nested virtualization needs c8i, m8i or r8i),
+#              IT_W11_FAILSAFE_MINUTES (default 1440: the lab host powers off, and so terminates, after it),
+#              IT_W11_WK_RECHECK (1 = stage win11:wk adds the re-check block WK.re.*),
+#              IT_W11_WK_VCREDIST (1 = stage win11:wk installs the Visual C++ 2015-2022 Redistributable x64 first).
+#              The API key parameter is yours to create and to delete; "leftovers" reports it while it exists.
 # Exit code: non-zero if any stage reports a failure.
 
 set -u
@@ -269,6 +288,68 @@ snapshot_retained() { # record physical ids of RETAIN resources before destroy
   done
   log "retained resources recorded: $(wc -l < "$W/retained.tsv" | tr -d ' ')"
 }
+st_kirowin() {
+  [ -n "${WIN_ID:-}" ] && [ "$WIN_ID" != None ] || { log "no Windows runner"; return; }
+  local pre="\$env:KIRO_WK_REGION = '$R'"
+  [ "${IT_WK_UNINSTALL:-0}" = 1 ] && pre="$pre; \$env:KIRO_WK_UNINSTALL = '1'"
+  if ! ssm_run "$WIN_ID" AWS-RunPowerShellScript windows-kiro-cli "$(windows_cmd windows-kiro-cli-suite.ps1 "$pre")" 5400; then
+    RC=1
+    # The suite removes the API key file and restores the policy itself; a run that SSM stopped at
+    # its time limit never gets there, so do both again (harmless after a normal failure).
+    ssm_run "$WIN_ID" AWS-RunPowerShellScript windows-kiro-cli-cleanup "Remove-Item -LiteralPath 'C:\\kiro-test\\wk\\secret\\key.txt' -Force -ErrorAction SilentlyContinue; if (Test-Path -LiteralPath 'C:\\kiro-test\\wk\\secret\\key.txt') { exit 1 }; & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'C:\\kiro-test\\repo\\mdm\\lockdown-windows.ps1' -StageSources -DeployHooks -InstallUser -DisableUpdates | Out-Null; exit \$LASTEXITCODE" 900 || true
+  fi
+  # ssm_run prints FAIL, SKIP and PHASE lines only; this stage's record is in its PASS and INFO lines.
+  grep -E '^(NOTE |KIT |CHECK [^ ]+ (INFO|PASS)( |$))' "$W/logs/windows-kiro-cli.stdout" | mask || true
+}
+st_kiro() {
+  [ -n "${LINUX_ID:-}" ] && [ "$LINUX_ID" != None ] || { log "no Linux runner"; return; }
+  log "kiro phase on the Linux runner: open egress, so K1 does not show an install through the allowlist"
+  ssm_run "$LINUX_ID" AWS-RunShellScript linux-setup "$(linux_cmd setup)" 1200 || RC=1
+  ssm_run "$LINUX_ID" AWS-RunShellScript linux-kiro "$(linux_cmd kiro)" 2400 || RC=1
+  grep -E '^CHECK [^ ]+ PASS( |$)' "$W/logs/linux-kiro.stdout" | mask || true
+}
+# A random password straight into an SSM SecureString; it is never printed.
+ensure_secret() { # parameter name
+  aws_ ssm get-parameter --name "$1" >/dev/null 2>&1 && return 0
+  local p; p="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20)"
+  aws_ ssm put-parameter --name "$1" --type SecureString --value "${p}Kx7-" >/dev/null || die "could not create $1"
+  unset p
+  log "created $1 (SecureString; read it with: aws ssm get-parameter --with-decryption --name $1 --query Parameter.Value --output text)"
+}
+st_win11host() {
+  [ -n "${BUCKET:-}" ] || die "run 'up' first"
+  local st subnet sg profile ami ud
+  if [ -n "${W11_ID:-}" ]; then
+    st="$(aws_ ec2 describe-instances --instance-ids "$W11_ID" --query 'Reservations[0].Instances[0].State.Name' --output text 2>/dev/null)"
+    case "$st" in pending|running) log "Windows 11 lab host exists ($st)"; wait_ssm_online "$W11_ID"; return ;; esac
+  fi
+  for n in win11-host-admin win11-guest-admin win11-guest-user; do ensure_secret "/kiro-fsi-test/$n"; done
+  subnet="$(aws_ cloudformation describe-stack-resource --stack-name "$HARNESS" --logical-resource-id Subnet --query StackResourceDetail.PhysicalResourceId --output text)"
+  sg="$(aws_ cloudformation describe-stack-resource --stack-name "$HARNESS" --logical-resource-id RunnerSg --query StackResourceDetail.PhysicalResourceId --output text)"
+  profile="$(out "$HARNESS" RunnerProfileName)"
+  ami="$(aws_ ssm get-parameter --name /aws/service/ami-windows-latest/Windows_Server-2025-English-Full-Base --query Parameter.Value --output text)"
+  ud="$(printf '<powershell>\nshutdown.exe /s /t %d /c "kiro-fsi-test failsafe" /d p:0:0\n</powershell>\n' $(( ${IT_W11_FAILSAFE_MINUTES:-1440} * 60 )))"
+  W11_ID="$(aws_ ec2 run-instances --image-id "$ami" --instance-type "${IT_W11_TYPE:-m8i.2xlarge}" \
+      --cpu-options NestedVirtualization=enabled --iam-instance-profile Name="$profile" \
+      --network-interfaces "DeviceIndex=0,SubnetId=$subnet,Groups=$sg,AssociatePublicIpAddress=true" \
+      --metadata-options HttpEndpoint=enabled,HttpTokens=required,HttpPutResponseHopLimit=1 \
+      --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=200,VolumeType=gp3,Encrypted=true,DeleteOnTermination=true}' \
+      --instance-initiated-shutdown-behavior terminate --user-data "$ud" \
+      --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=kiro-fsi-test-win11-host},{Key=Project,Value=kiro-fsi-test},{Key=Role,Value=win11-host}]' \
+                           'ResourceType=volume,Tags=[{Key=Project,Value=kiro-fsi-test}]' \
+      --query 'Instances[0].InstanceId' --output text)" || die "run-instances failed"
+  save W11_ID "$W11_ID"
+  save W11_DEADLINE "$(( $(date +%s) + ${IT_W11_FAILSAFE_MINUTES:-1440} * 60 ))"
+  log "Windows 11 lab host launched ($(echo "$W11_ID" | mask)), ${IT_W11_TYPE:-m8i.2xlarge}, failsafe ${IT_W11_FAILSAFE_MINUTES:-1440} min"
+  aws_ ec2 wait instance-running --instance-ids "$W11_ID"
+  wait_ssm_online "$W11_ID" || wait_ssm_online "$W11_ID"
+}
+st_win11() { # phase
+  [ -n "${W11_ID:-}" ] || die "run 'win11host' first"
+  case "$1" in *[!A-Za-z0-9-]*|"") die "bad win11 phase: $1" ;; esac
+  ssm_run "$W11_ID" AWS-RunPowerShellScript "win11-$1" "$(windows_cmd win11-lab.ps1 "\$env:W11_PHASE = '$1'; \$env:W11_REGION = '$R'; \$env:W11_DEADLINE = '${W11_DEADLINE:-0}'; \$env:W11_WK_RECHECK = '${IT_W11_WK_RECHECK:-0}'; \$env:W11_WK_VCREDIST = '${IT_W11_WK_VCREDIST:-0}'")" 10800 || RC=1
+  grep -E '^(NOTE |CHECK [^ ]+ (INFO|PASS)( |$))' "$W/logs/win11-$1.stdout" | mask || true
+}
 st_egress() {
   # Test-only additions to the Kiro allowlist: SSM (to drive the probe), the results bucket, and the
   # AL2023 package mirrors (git/jq for the end-to-end test). Production allowlists do not need these.
@@ -304,6 +385,13 @@ empty_bucket() { # bucket (versioned / Object Lock aware)
   aws_ s3api delete-bucket --bucket "$b"
 }
 st_down() {
+  if [ -n "${W11_ID:-}" ]; then
+    aws_ ec2 terminate-instances --instance-ids "$W11_ID" >/dev/null 2>&1 && aws_ ec2 wait instance-terminated --instance-ids "$W11_ID" && log "Windows 11 lab host terminated"
+    save W11_ID ""
+  fi
+  for p in $(aws_ ssm describe-parameters --parameter-filters Key=Name,Option=BeginsWith,Values=/kiro-fsi-test/win11- --query 'Parameters[].Name' 2>/dev/null | jq -r '.[]'); do
+    aws_ ssm delete-parameter --name "$p" && log "deleted parameter $p"
+  done
   aws_ cloudformation describe-stacks --stack-name "$PROBE" >/dev/null 2>&1 && {
     aws_ cloudformation delete-stack --stack-name "$PROBE"; aws_ cloudformation wait stack-delete-complete --stack-name "$PROBE"; log "probe deleted"; }
   snapshot_retained
@@ -402,7 +490,7 @@ st_leftovers() {
 }
 
 # --------------------------------------------------------------------- main
-[ $# -ge 1 ] || { sed -n '2,32p' "$0"; exit 1; }
+[ $# -ge 1 ] || { sed -n '2,50p' "$0"; exit 1; }
 for stage in "$@"; do
   case "$stage" in
     all) set -- preflight up bundle linux windows deploy verify egress ;;   # "client" is opt-in: not here
@@ -412,7 +500,7 @@ for stage in "$@"; do
   log "===== stage: $stage"
   case "$stage" in
     preflight) st_preflight ;; up) st_up ;; bundle) st_bundle ;; linux) st_linux ;; windows) st_windows ;;
-    client) st_client ;;
+    client) st_client ;; kirowin) st_kirowin ;; kiro) st_kiro ;; win11host) st_win11host ;; win11:*) st_win11 "${stage#win11:}" ;;
     linux:*) ssm_run "$LINUX_ID" AWS-RunShellScript "linux-${stage#linux:}" "$(linux_cmd "${stage#linux:}")" 3600 || RC=1 ;;
     deploy) st_deploy ;; verify) st_verify ;; egress) st_egress ;; down) st_down ;; leftovers) st_leftovers ;;
     *) die "unknown stage: $stage" ;;

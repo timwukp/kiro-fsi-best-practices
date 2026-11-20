@@ -100,7 +100,7 @@ See the model approval matrix in Section 2.2.1.
 | 2026-09-30 | IDE | 1.2 (1.2.4) | **Protected configuration**: asks before the agent edits agent, hook or Power files or Workflow recipes, even when broader permissions allow the write. **Safer untrusted workspaces**: asks before every command and every Kiro config change; recipes are not loaded |
 | 2026-09-30 | CLI | 2.26.0 | **V3 approval safeguards**: stricter checks for hook and LSP file writes, for MCP tools and shell commands in untrusted workspaces, and for approvals that change while an action waits |
 | 2026-09-28 | CLI | 2.25.0 | New `SessionEnd` hook trigger (V3) |
-| 2026-09-23 | CLI | 2.24.0 | **`/tools trust-all`** (V3): session-wide tool approval after a warning; cannot override admin `deny`/`ask`. Project `.env` files are no longer loaded automatically into chats, MCP servers or tools |
+| 2026-09-23 | CLI | 2.24.0 | **`/tools trust-all`** (V3): session-wide tool approval after a warning. Kiro's governance page says no allow source overrides an admin `deny` or `ask`; measured for `--trust-all-tools` in headless runs (CLI 3.5.0, Windows Server 2022 and Windows 11, 2026-11-19 and 2026-11-20), an admin `deny` holds but an admin `ask` is approved (Section 4.1). Project `.env` files are no longer loaded automatically into chats, MCP servers or tools |
 | 2026-09-14 | IDE | 1.1 | Clearer MCP failure messages; more reliable hooks |
 | 2026-06-25 | IDE | 1.0.0 | **Capability-based permissions** (`permissions.yaml`; `deny > ask > allow` across scopes) replace Trusted Commands and the Command Denylist (breaking change); unified v1 hook files (`.kiro/hooks/*.json`) |
 | 2026-05-12 | CLI | 2.3.0 | OAuth Client ID for MCP servers (`oauth.clientId`) |
@@ -241,13 +241,20 @@ message counts; console shows user emails; subscription data is CSV-exportable.
   (macOS), `C:\ProgramData\Kiro\managed-settings.json` (Windows, UTF-8 without BOM)
   or `/etc/kiro/managed-settings.json` (Linux); restart Kiro to apply.
 - Admin rules may only `deny` or `ask`, and win over every user, workspace,
-  agent and session `allow` (`deny > ask > allow`). Headless runs treat `ask` as
-  `deny`.
+  agent and session `allow` (`deny > ask > allow`; except an admin `ask` under
+  `--trust-all-tools` in headless runs, Section 4.1). Headless runs treat `ask` as
+  `deny`, except runs started with `--trust-all-tools`, which approve admin `ask`
+  rules (measured, Section 4.1). Use `deny` for anything that must never run.
 - Permission rules fail closed (a malformed file, an `allow` effect or an unknown
   field blocks all tool calls); the sign-in method restriction fails open, while
   the sign-in portal (`auth_portal_url` / `AuthPortalUrl`, CLI 3.5.0+) falls back
   to the default portal instead.
 - Client-enforced: a user with local administrator rights can circumvent it.
+- On Windows, shell rules are matched case-sensitively while PowerShell is not: a
+  casing the policy does not list runs, with no administrative access (measured
+  with Kiro CLI 3.5.0 on Windows Server 2022 and Windows 11, 2026-11-19 and
+  2026-11-20; [details](../managed-settings/README.md#measured-limits-on-windows-kiro-cli-350-2026-11-20)). Shell `deny` rules
+  there are a guardrail, not a boundary; control egress at the network layer.
 - Reference: [`permissions-and-managed-settings.md`](permissions-and-managed-settings.md);
   deployable files: [`../managed-settings/`](../managed-settings/).
 
@@ -336,8 +343,15 @@ session decisions, and the admin policy (Section 2.6).
 
 - Capabilities: `fs_read`, `fs_write`, `shell`, `web_fetch`, `web_search`, `mcp`,
   `subagent`, `skill`, `power`, `context`, `diagnostics`, `sandbox_network`.
-- `deny > ask > allow` with no precedence between scopes; admin rules cannot be
-  weakened by `--trust-all-tools` or `/tools trust-all`.
+- `deny > ask > allow` with no precedence between scopes; an admin `deny` holds
+  against `--trust-all-tools` (measured). An admin `ask` does **not**: in headless
+  runs of Kiro CLI 3.5.0 on Windows Server 2022 and Windows 11 (2026-11-19 and
+  2026-11-20), `Remove-Item <file> -Force` under an admin `ask` rule ran with
+  `--trust-all-tools` and nobody was asked; without the flag it was refused.
+  Kiro's governance page says an admin `ask` forces a prompt; its permissions page
+  says the trust-all options trust every action the rules do not deny, which is
+  what was measured. `/tools trust-all` was not measured. Reported to Kiro on
+  GitHub (kirodotdev/Kiro).
 - Kiro hardcoded invariants: the agent can never write `~/.kiro/settings/`,
   `.kiro/settings/` or `~/.kiro/workspace-roots/`, and Kiro always asks before
   it writes `.git/**` or the agents, hooks, workflows and powers directories.
@@ -436,12 +450,12 @@ auditable for approved Tier 2 servers.
 
 | Control | Setting | Rationale |
 |---------|---------|-----------|
-| Admin policy | `managed-settings.json` deployed by MDM/GPO (deny/ask rules + sign-in restriction) | Client-enforced baseline that user and session settings cannot weaken |
+| Admin policy | `managed-settings.json` deployed by MDM/GPO (deny/ask rules + sign-in restriction); `deny` for anything that must never run | Client-enforced baseline; user and session settings cannot weaken a `deny`, but `--trust-all-tools` approves an admin `ask` (Section 4.1). On Windows, shell rules are case-sensitive, so they are a guardrail |
 | MCP servers | MCP governance on; registry allow-list with exact pinned versions | Tier 1/2/3 enforcement |
 | Models | Approved list; exclude Global-scope, preview and experimental models by default (Section 2.2.1) | Data location: most models use geography-level cross-region inference, Global-scope models may be processed worldwide; preview retention terms |
 | Web tools | Disabled org-wide, or admin `ask`/`deny` on `web_fetch` / `web_search` | Prevent data egress |
 | Subagents | `subagent` rules (IDE 1.0 / CLI V3) or `availableAgents`/`trustedAgents` (Classic) | Block unvetted agents |
-| Tool trust | Narrow user `allow` rules; no `capability: all`; no `--trust-all-tools` / `/tools trust-all` in regulated repositories | Least privilege |
+| Tool trust | Narrow user `allow` rules; no `capability: all`; no `--trust-all-tools` / `/tools trust-all` in regulated repositories; no `--trust-all-tools` / `--trust-tools` in unattended and agent configurations (code review or CI check) | Least privilege; the flag approves admin `ask` rules |
 | Workspace trust | Leave unknown repositories untrusted | Repository content cannot load agents, steering or MCP config |
 | API keys / Cloud Sessions | Off | Cloud Sessions bypass CMK, MCP registry and model availability settings |
 | Identity | IdP + SCIM, MFA, no social/Builder ID | Access control |

@@ -120,8 +120,12 @@ An opt-in stage, `client` (phase WC, never part of `all`), downloads the Kiro ID
 the Windows Server runner and runs the automatable part of the Windows client validation kit
 ([`security-tests/windows-client/`](security-tests/windows-client/README.md), W2, issue #43). The kit itself
 is run by hand on a Windows 11 **test device**: it installs Kiro, deploys the sample policy and tampers with
-it, so it must never be run on a device that carries an organisation's policy. It has not yet been run on a
-Windows 11 client.
+it, so it must never be run on a device that carries an organisation's policy. It was run on a Windows 11
+Enterprise 26H2 (Evaluation) test VM on 2026-11-19 and 2026-11-20 (Kiro IDE 1.4.236, Kiro CLI 3.5.0; Intune
+emulated, no tenant); the results are in
+[`kiro-docs/aws-integration-test-evidence.md`](kiro-docs/aws-integration-test-evidence.md). Issue #43 stays open
+for a real Intune tenant, the per-user build installed by a user, a profile created later in Kiro IDE, ARM64
+and the F1 case check in Kiro IDE.
 
 The test environment is isolated:
 - the runners are reachable only through Systems Manager (no inbound rules, no SSH keys);

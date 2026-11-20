@@ -237,12 +237,12 @@ rules:
 ```
 
 **How the rules combine:**
-- **Deny wins.** `deny > ask > allow` across all scopes, with no precedence between scopes. A user, workspace, agent or session `allow` (including `kiro-cli --trust-all-tools` and `/tools trust-all`) cannot remove an admin `deny` or `ask`.
-- **Headless runs** (no interactive client) treat every `ask` as `deny`, so a pipeline that runs Kiro cannot push, publish or deploy under this policy.
+- **Deny wins.** `deny > ask > allow` across all scopes, with no precedence between scopes. A user, workspace, agent or session `allow` (including `kiro-cli --trust-all-tools` and `/tools trust-all`) cannot remove an admin `deny`. An admin `ask` is weaker than Kiro's governance page says: in headless runs of Kiro CLI 3.5.0 on Windows Server 2022 and Windows 11 (2026-11-19 and 2026-11-20), `--trust-all-tools` approved a command under an admin `ask` rule without asking anyone ([measured](managed-settings/README.md#measured-limits-on-windows-kiro-cli-350-2026-11-20)). Use `deny` for anything that must never run, and keep `--trust-all-tools` and `--trust-tools` out of pipeline and agent configurations (code review or a CI check).
+- **Headless runs** (no interactive client) treat every `ask` as `deny`, so a pipeline that runs Kiro without `--trust-all-tools` cannot push, publish or deploy under this policy. With the flag, the `ask` rules are approved.
 - **Do not auto-allow `npm install`, `npm ci`, `pip install`, `terraform init` or `terraform plan`.** They run third-party code (package lifecycle scripts, Terraform providers and `external` data sources). Leave them at the default prompt.
 - **Replaced settings.** Kiro IDE 1.0 replaced Trusted Commands and the Command Denylist with these rules: trusted command prefixes become `allow` rules and denylist entries become `deny` rules (`kiroAgent.trustedCommands` and `kiroAgent.commandDenylist` are no longer used). In the CLI, convert legacy agent `toolsSettings` with `kiro-cli agent migrate` (or `/upgrade-agent`); `autoAllowReadonly` and `denyByDefault` have no equivalent and must be written as explicit rules.
 - **Hardcoded invariants.** Kiro always denies agent writes to `~/.kiro/settings/` and `.kiro/settings/` (so the agent cannot edit its own permission or MCP files), and always asks before writes to `.git/**` and to the agents, hooks, workflows and powers directories under `.kiro` and `~/.kiro`.
-- **Limits.** Shell globs match the command text and can be evaded (for example by quoting or indirection), and all of these rules are enforced by the client, so a local administrator can remove them. Hooks ([`agent-hooks/README.md`](agent-hooks/README.md)), the VDI controls in Part 1, Section 4 and server-side branch protection (Section 13.2) are the further layers. See [`managed-settings/README.md`](managed-settings/README.md#glob-limitations).
+- **Limits.** Shell globs match the command text and can be evaded (for example by quoting or indirection), and all of these rules are enforced by the client, so a local administrator can remove them. On Windows, shell rules are matched case-sensitively while PowerShell is not: `INVOKE-WEBREQUEST` in capitals ran past an admin `deny` rule (measured with Kiro CLI 3.5.0, same runs). There, a shell `deny` is a guardrail, not a boundary: control egress at the network layer (proxy or DNS Firewall allowlist), and keep the case-insensitive PowerShell guard hooks as a backstop for what they cover. Hooks ([`agent-hooks/README.md`](agent-hooks/README.md)), the VDI controls in Part 1, Section 4 and server-side branch protection (Section 13.2) are the further layers. See [`managed-settings/README.md`](managed-settings/README.md#glob-limitations).
 
 ### 6.2 Secrets Management
 
@@ -541,7 +541,7 @@ def generate_compliance_report(days=30):
 5. ✅ Kiro access tested
 
 **Training Topics:**
-- Agent autonomy (Supervised vs Autopilot), permission prompts and why admin rules cannot be overridden
+- Agent autonomy (Supervised vs Autopilot), permission prompts, why user and session settings cannot remove an admin `deny`, and the measured limits (`--trust-all-tools` approves an admin `ask`; Windows shell rules match case-sensitively)
 - Workspace trust: when to trust a repository and when to leave it untrusted
 - MCP registry and approved MCP servers
 - Secrets management
@@ -1101,7 +1101,7 @@ The Monetary Authority of Singapore published the **Principles to Promote Fairne
    /.github/workflows/     @example-bank/platform-security
    /cdk/                   @example-bank/cloud-platform
    ```
-3. **Kiro permissions:** the admin policy in [`managed-settings/`](managed-settings/) asks before `git push*` and denies force pushes and history rewrites, and it asks before the agent writes CI pipeline files or `CODEOWNERS`. In headless runs the `ask` becomes a `deny`.
+3. **Kiro permissions:** the admin policy in [`managed-settings/`](managed-settings/) asks before `git push*` and denies force pushes and history rewrites, and it asks before the agent writes CI pipeline files or `CODEOWNERS`. In headless runs the `ask` becomes a `deny`, unless the run is started with `--trust-all-tools`, which approves it (measured; see Section 6.1). Keep the flag out of pipeline configurations.
 
 **Code Attribution:**
 - All Kiro-generated code must pass through standard code review
