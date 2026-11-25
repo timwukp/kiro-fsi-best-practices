@@ -125,7 +125,13 @@ Enterprise 26H2 (Evaluation) test VM on 2026-11-19 and 2026-11-20 (Kiro IDE 1.4.
 emulated, no tenant); the results are in
 [`kiro-docs/aws-integration-test-evidence.md`](kiro-docs/aws-integration-test-evidence.md). Issue #43 stays open
 for a real Intune tenant, the per-user build installed by a user, a profile created later in Kiro IDE, ARM64
-and the F1 case check in Kiro IDE.
+and a repeat of the F1 case check in Kiro IDE. That check was run once per mode with Kiro IDE 1.5.11 on a Windows 11
+Enterprise 26H2 test VM on 2026-11-21, for one cmdlet, one casing and one rule. In Supervised mode the
+all-capitals spelling was not refused by the deny rule and Kiro asked the user. In the mode "Approve for me" no
+prompt appeared and Kiro reported that it ran the command; the command string and its output were not visible, so
+"ran" is Kiro's own report, and the result is consistent with the deny rule not matching the all-capitals spelling.
+This is a weakness in how the policy is enforced, seen once per mode; the limits are in
+[`managed-settings/README.md`](managed-settings/README.md#measured-on-windows-with-kiro-ide-1511-2026-11-21).
 
 The test environment is isolated:
 - the runners are reachable only through Systems Manager (no inbound rules, no SSH keys);
