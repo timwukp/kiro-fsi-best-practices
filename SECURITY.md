@@ -132,6 +132,13 @@ prompt appeared and Kiro reported that it ran the command; the command string an
 "ran" is Kiro's own report, and the result is consistent with the deny rule not matching the all-capitals spelling.
 This is a weakness in how the policy is enforced, seen once per mode; the limits are in
 [`managed-settings/README.md`](managed-settings/README.md#measured-on-windows-with-kiro-ide-1511-2026-11-21).
+A third round on the same lab VM on 2026-11-27 (one run per test, each with a named control, no approval button
+clicked, no real Intune tenant) measured it from a trace file and a local listener: for `Invoke-WebRequest` the
+listed spelling did not run and gave no prompt in all three modes, and the all-capitals spelling gave an approval
+prompt in Supervised and in "Accept file changes" and ran with no prompt in "Approve for me" (T-CASE-04a); a second
+cmdlet, `Invoke-Expression`, gave the same outcome in Supervised and in "Approve for me" (T-CASE-05a) and was not
+tested in "Accept file changes". What stopped the listed spelling is not a check. Results, limits and open tests:
+[`kiro-docs/mdm-test-evidence.md`](kiro-docs/mdm-test-evidence.md#round-3-spec-driven-re-test-windows-11-kiro-ide-1511-2026-11-27).
 
 The test environment is isolated:
 - the runners are reachable only through Systems Manager (no inbound rules, no SSH keys);
